@@ -122,6 +122,20 @@ describe('each relation, for a 戊 day master in a 辰 month', () => {
     expect(analyze([col(3, '辛酉'), col(0, '丙子')], '戊', '午').stemLines).toEqual([]);
   });
 
+  it('never joins the natal 年 and 时 in a group either: it leaves out the 时, else the 年, or draws pairs', () => {
+    const lines = (cols: RelColumn[]) => analyze(cols, '戊', '辰').branchLines.map((l) => show(l));
+    // 时 辰, 月 子, 年 申: 申子辰 needs both 年 and 时, so two 半合 stand, and no 拱 between 年 and 时.
+    expect(lines([col(3, '甲辰'), col(1, '丙子'), col(0, '戊申')])).toEqual(['子1-申2 半合水(财)成化', '辰0-子1 半合水(财)成化']);
+    // 时 申, 日 辰, 月 子, 年 申: whole without the 时, whose 申 keeps its own 半合 and 拱.
+    expect(lines([col(3, '甲申'), col(2, '丙辰'), col(1, '戊子'), col(0, '庚申')])).toEqual([
+      '辰1-子2-申3 三合水(财)成化', '申0-子2 半合水(财)成化', '申0-辰1 拱水(财)',
+    ]);
+    // 时 申, 月 巳, 年 寅: no 三刑, nor 寅 冲 申; 刑 for 寅巳 and for 巳申.
+    expect(lines([col(3, '甲申'), col(1, '乙巳'), col(0, '戊寅')])).toEqual([
+      '巳1-寅2 刑', '申0-巳1 刑', '申0-巳1 合水(财)成化',
+    ]);
+  });
+
   it('orders the lines by their later column, then by kind, then by their earlier column', () => {
     // 流年 子 against 年 卯 (刑), 月 午 (冲) and 日 辰 (半合): 冲, 刑, 半合.
     const cols = [col(2, '甲辰'), col(1, '甲午'), col(0, '丁卯'), col(5, '丙子')];

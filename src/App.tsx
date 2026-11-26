@@ -17,6 +17,8 @@ export interface Entry {
   input: string;
   gender: Gender;
   lateZi: Settings['lateZi'];
+  /** Cast by 时空起盘: `input` is the minute it was cast, not the input screen's birth minute */
+  now?: true;
 }
 
 export interface AppState {
@@ -94,12 +96,14 @@ export function reducer(state: AppState, action: Action): AppState {
     case 'cast':
       return castEntry(state, { input: state.input, gender: state.gender, lateZi: state.lateZi }) ?? state;
     case 'castNow':
-      return castEntry(state, { input: action.now, gender: state.gender, lateZi: state.lateZi }) ?? state;
+      return castEntry(state, { input: action.now, gender: state.gender, lateZi: state.lateZi, now: true }) ?? state;
     case 'open': {
-      // On Forward the chart is usually still here: show it as it was. After a reload, cast it again.
+      // On Forward the chart is usually still here: show it as it was. After a reload, cast it again, and put its
+      // choices back on the input screen, as 起盘 left them: the birth minute too, unless 时空起盘 cast it.
       if (state.chart && state.cast && sameEntry(state.cast, action.entry)) return { ...state, screen: 'chart' };
-      const { gender, lateZi } = action.entry;
-      return castEntry({ ...state, gender, lateZi }, action.entry) ?? { ...state, screen: 'input' };
+      const { input, gender, lateZi, now } = action.entry;
+      const choices = { input: now ? state.input : input, gender, lateZi };
+      return castEntry({ ...state, ...choices }, action.entry) ?? { ...state, screen: 'input' };
     }
     case 'back':
       return { ...state, screen: 'input' };
@@ -130,7 +134,8 @@ const CHART_ENTRY = 'bazi-chart';
 function entryIn(state: unknown): Entry | null {
   const e = (state as Record<string, unknown> | null)?.[CHART_ENTRY] as Partial<Entry> | undefined;
   if (!e || typeof e.input !== 'string' || (e.gender !== '男' && e.gender !== '女')) return null;
-  return { input: e.input, gender: e.gender, lateZi: e.lateZi === 'same' ? 'same' : 'next' };
+  const lateZi = e.lateZi === 'same' ? 'same' : 'next';
+  return { input: e.input, gender: e.gender, lateZi, ...(e.now === true && { now: true }) };
 }
 
 /** How often the app reads the clock again, for the 时空起盘 card and 虚岁. */
@@ -222,7 +227,7 @@ export function App({ initial, now }: AppProps) {
       onCastNow={() => {
         const minute = now();
         setClock(minute);
-        open({ input: minute, gender: state.gender, lateZi: state.lateZi }, { type: 'castNow', now: minute });
+        open({ input: minute, gender: state.gender, lateZi: state.lateZi, now: true }, { type: 'castNow', now: minute });
       }}
     />
   );

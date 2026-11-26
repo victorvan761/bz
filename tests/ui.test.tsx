@@ -309,7 +309,7 @@ describe('the reducer', () => {
     const s = reducer(start(), { type: 'castNow', now: '2026-11-25T12:20' });
     expect([s.chart?.pillars.year.ganZhi, s.chart?.pillars.hour.ganZhi]).toEqual(['丙午', '戊午']);
     expect(s.input).toBe('1996-06-20T18:00');
-    expect(s.cast).toEqual({ input: '2026-11-25T12:20', gender: '男', lateZi: 'next' });
+    expect(s.cast).toEqual({ input: '2026-11-25T12:20', gender: '男', lateZi: 'next', now: true });
   });
 
   it('keeps only real times from the date picker', () => {
@@ -340,5 +340,15 @@ describe('the reducer', () => {
     expect([other.chart?.pillars.year.ganZhi, other.gender, other.view]).toEqual(['戊子', '女', '资料']);
     const broken = reducer(back, { type: 'open', entry: { input: 'nonsense', gender: '女', lateZi: 'next' } });
     expect(broken.screen).toBe('input');
+  });
+
+  it('after a reload, puts the reopened chart’s choices back on the input screen: the birth minute unless 时空起盘 cast it', () => {
+    // A reload starts from the present minute, then opens the chart's history entry.
+    const reloaded = initialState('2026-11-25T12:20');
+    const birth = reducer(reloaded, { type: 'open', entry: { input: '2008-04-18T18:00', gender: '女', lateZi: 'same' } });
+    expect(reducer(birth, { type: 'back' })).toMatchObject({ screen: 'input', input: '2008-04-18T18:00', gender: '女', lateZi: 'same' });
+    const now = reducer(reloaded, { type: 'open', entry: { input: '2026-11-24T09:00', gender: '女', lateZi: 'same', now: true } });
+    expect([now.screen, now.chart?.time.day, now.chart?.time.hour]).toEqual(['chart', 24, 9]);
+    expect(reducer(now, { type: 'back' })).toMatchObject({ screen: 'input', input: '2026-11-25T12:20', gender: '女', lateZi: 'same' });
   });
 });

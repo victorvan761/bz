@@ -200,6 +200,21 @@ describe('the App Store chart: 坤造 2008-04-18 18:00', () => {
   });
 });
 
+describe('a 交运 before 立春 (SPEC §9 Q7): 女 1990-04-28 12:00, 交运 on 1998-01-11', () => {
+  const chart = castBazi({ year: 1990, month: 4, day: 28, hour: 12, minute: 0 }, '女');
+
+  it('falls in the 流年 before the year its 大运 lists first, by 立春', () => {
+    expect(chart.yun.start).toBe('1998-01-11 12:00');
+    expect(chart.daYun[0].startYear).toBe(1998);
+    expect(jiaoYunText(chart)).toMatch(/^逢丁壬年 小寒后 \d+天 交大运$/);
+  });
+
+  it('grays none of the first year: that 流年 is all in the new 大运, ten years on too', () => {
+    expect(yearItems(chart, 0)[0].jiaoYun).toBe(0);
+    expect(yearItems(chart, 1)[0].jiaoYun).toBe(0);
+  });
+});
+
 describe('the lookups, against lunar-typescript', () => {
   it('十神 for all 100 pairs of stems', () => {
     for (const d of STEMS) {

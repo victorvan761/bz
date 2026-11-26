@@ -46,8 +46,8 @@ From the top, as grouped rows on a light gray page:
 | 男 · 女 | A segmented control. It sets the direction of 大运 (§4.3). Default 男 |
 | 出生日期 | The chosen minute on two lines at the right, `1996年 6月20日` over `下午6:00 酉时`, and a chevron; a tap opens the date picker. It starts at the current minute |
 | 夜子时 | 算次日 (default) or 算当日: whether 23:00–23:59 takes the next day's 日柱 (§4.1). Not in the screenshots, which show no setting for it; kept from the earlier version |
-| 起盘 | Casts the chart and opens it. The chart gets its own browser history entry, so the back gesture returns here, and a reload shows the chart again |
-| 时空起盘 | A card with the present moment's four pillars (时 日 月 年 from the left, stems over branches, in gray) and `现在是` / `2026年 11月25日` / `下午12:20 午时`. A tap casts the present minute for the chosen 男 or 女 |
+| 起盘 | Casts the chart and opens it. The chart gets its own browser history entry, so the back gesture returns here, and a reload shows the chart again, with this screen set as it was cast: 男 or 女, the birth minute and 夜子时 |
+| 时空起盘 | A card with the present moment's four pillars (时 日 月 年 from the left, stems over branches, in gray) and `现在是` / `2026年 11月25日` / `下午12:20 午时`. A tap casts the present minute for the chosen 男 or 女, leaving 出生日期 as it is, after a reload too |
 
 ## 4 · The chart
 
@@ -169,7 +169,8 @@ The 命身胎息 tab lists 命宫, 身宫, 胎元 and 胎息, each with its 纳�
 | Branches | 暗合: 寅丑, 卯申, 午亥 | 暗合 |
 
 - Not drawn: 六害 and 六破 (the screenshots' 子酉 and 子未 have no line), and any relation between the natal 年 and 时 (their 丙辛 has no line, while the 流年 丙 and the 时 辛 do).
-- A whole 三合 or 三刑 replaces the pair lines of its own branches.
+- A whole 三合 or 三刑 replaces the pair lines among the columns it joins.
+- A whole 三合, 三会 or 三刑 never joins the natal 年 and 时 either: it leaves out the 时 if it stays whole without it (that 时 keeps its own pair lines), else the 年; if it needs both, it isn't whole, and its branches get pair lines.
 - The 十神 in the label is the 化神's against the day master: of its yang stem for a stem 合 (水 → 壬 → 才), of its yin stem for a branch combination (火 → 丁 → 印). The 化神 and its 十神 take the 喜忌 colors of the stacked characters (in 五色 in the 五行 mode); the 藏干 and 五行 modes leave the (十神) out: 合水不化.
 - It 成化 when the month branch holds that element among its 藏干, or the month branch's own element produces it; else 不化. With 午 as the month branch, 火 成化 and 水 不化.
 
@@ -213,7 +214,7 @@ Each has the default the prototype uses. A different answer means changing that 
 | Q1 | Is 喜忌 the 三得 estimate of §4.5 for other charts, and what is 用神 for 身强? | §4.5, 用神 财 for 身强 | A 身强 chart's colors; a chart whose 三得 is 2 to 1 |
 | Q2 | Does a stem 合 always name its yang 化神 stem, and a branch combination its yin one (合水(才), 合火(印))? | Yes | A 甲己 合土 and a 子丑 合土 for the same day master |
 | Q3 | How are 半合, 三合, 三会, 拱, 暗合 and a stem 冲 labeled, and do 三合 and 三刑 draw one line or three? | §6.1 | Charts with 申子辰, 寅巳申, 寅丑, 甲庚 |
-| Q4 | Do the natal 年 and 时 never relate, or only some relations? Do two flows relate? | Never; yes | A chart with 年 子 and 时 午, or 流年 冲 大运 |
+| Q4 | Do the natal 年 and 时 never relate, or only some relations? Can a 三合 join them through a third column? Do two flows relate? | Never, not even in a group (§6.1); yes | A chart with 年 子 and 时 午, or 年 申 and 时 辰 with a 流年 子, or 流年 冲 大运 |
 | Q5 | What finds 学堂 and 学士 (学士 on both 午 columns, 学堂 on the 流年 丙午 only)? | Not computed | The 神煞 view of a few charts |
 | Q6 | Are 驿马 and 华盖 counted from 年支 and 日支, like 咸池 and 天喜, and 劫煞 and 亡神 from 年支 alone, like 灾煞? | §7 | Charts whose 年支 and 日支 differ |
 | Q7 | The 流年 grid grays the part of the 交运 year before 交运 (the screenshots' 2021: 146 of the cell's 172 pixels, 310 of the year's 366 days, §5.3). When 交运 falls before 立春, does the gray move to the year before, which the previous 大运 lists? | No gray then: that 流年 is all in the new 大运 | A birth whose 交运 falls in January |

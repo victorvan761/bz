@@ -132,10 +132,26 @@ function stemLinesOf(cols: readonly RelColumn[], dayMaster: Stem, monthBranch: B
   return lines;
 }
 
-/** The columns holding any branch of a group, if every branch of it stands somewhere; else null. */
+/** Whether the columns at `at` hold every branch of a group. */
+const holdsAll = (cols: readonly RelColumn[], at: readonly number[], branches: string) =>
+  [...branches].every((b) => at.some((i) => cols[i].branch === b));
+
+/**
+ * The columns a whole group joins: every column holding one of its branches, if all of them stand somewhere; else
+ * null. Like a pair, a group never joins the natal 年 and 时: it leaves out the 时 if it stays whole without it, else
+ * the 年, and isn't whole if it needs both.
+ */
 function wholeGroup(cols: readonly RelColumn[], branches: string): number[] | null {
-  if (![...branches].every((b) => cols.some((c) => c.branch === b))) return null;
-  return cols.flatMap((c, i) => (branches.includes(c.branch) ? [i] : []));
+  const at = cols.flatMap((c, i) => (branches.includes(c.branch) ? [i] : []));
+  if (!holdsAll(cols, at, branches)) return null;
+  const year = at.find((i) => cols[i].order === YEAR);
+  const hour = at.find((i) => cols[i].order === HOUR);
+  if (year === undefined || hour === undefined) return at;
+  for (const left of [hour, year]) {
+    const rest = at.filter((i) => i !== left);
+    if (holdsAll(cols, rest, branches)) return rest;
+  }
+  return null;
 }
 
 function branchLinesOf(cols: readonly RelColumn[], dayMaster: Stem, monthBranch: Branch): Line[] {
@@ -143,12 +159,16 @@ function branchLinesOf(cols: readonly RelColumn[], dayMaster: Stem, monthBranch:
   const add = (kind: LineKind, at: number[], label: Label) =>
     lines.push({ level: 'branch', kind, label, members: at.map((col) => ({ col, char: cols[col].branch })) });
 
-  // Whole groups of three first. A whole 三合 or 三刑 replaces the pair lines among its own branches.
-  const whole = new Set<string>();
+  // Whole groups of three first. A whole 三合 or 三刑 replaces the pair lines among the columns it joins.
+  const whole = new Map<string, number[]>();
+  const inWhole = (branches: string, i: number, j: number) => {
+    const at = whole.get(branches);
+    return at !== undefined && at.includes(i) && at.includes(j);
+  };
   for (const [branches, element] of SAN_HE) {
     const at = wholeGroup(cols, branches);
     if (at) {
-      whole.add(branches);
+      whole.set(branches, at);
       add('三合', at, huaLabel('三合', element, 'branch', dayMaster, monthBranch));
     }
   }
@@ -159,7 +179,7 @@ function branchLinesOf(cols: readonly RelColumn[], dayMaster: Stem, monthBranch:
   for (const branches of SAN_XING) {
     const at = wholeGroup(cols, branches);
     if (at) {
-      whole.add(branches);
+      whole.set(branches, at);
       add('三刑', at, { word: '三刑' });
     }
   }
@@ -176,13 +196,13 @@ function branchLinesOf(cols: readonly RelColumn[], dayMaster: Stem, monthBranch:
     const he = pairIn(Object.keys(BRANCH_HE), a, b);
     if (he) pair('合', huaLabel('合', BRANCH_HE[he], 'branch', dayMaster, monthBranch));
     for (const [branches, element] of SAN_HE) {
-      if (whole.has(branches) || !branches.includes(a) || !branches.includes(b)) continue;
+      if (inWhole(branches, i, j) || !branches.includes(a) || !branches.includes(b)) continue;
       if (a === branches[1] || b === branches[1]) pair('半合', huaLabel('半合', element, 'branch', dayMaster, monthBranch));
       else pair('拱', huaLabel('拱', element, 'branch', dayMaster, monthBranch, false));
     }
     if (pairIn([ZI_MAO], a, b)) pair('刑', { word: '刑' });
     for (const branches of SAN_XING) {
-      if (!whole.has(branches) && branches.includes(a) && branches.includes(b)) pair('刑', { word: '刑' });
+      if (!inWhole(branches, i, j) && branches.includes(a) && branches.includes(b)) pair('刑', { word: '刑' });
     }
     if (pairIn(AN_HE, a, b)) pair('暗合', { word: '暗合' });
   }
