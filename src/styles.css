@@ -1,25 +1,35 @@
-/* 八字排盘. Colors and sizes after 十三行八字's chart on a 390 pt wide iPhone, in units of --u (SPEC §2). */
+/* 八字排盘. Colors and sizes after 十三行八字 on a 390 pt wide iPhone, in units of --u (SPEC §2): measured in its
+   screenshots, 2.372 pixels to the unit. */
 :root {
-  --accent: #7b3a96;
-  --accent-soft: #f2e9f7;
-  --ink: #1c1c1e;
-  --ink-2: #3a3a3c;
-  --gray: #8e8e93;
-  --gray-2: #b3b3b8;
-  --hair: #e2e2e7;
-  --fill: #f2f2f6;
+  --accent: #8800a3;
+  --ink: #000000;
 
-  /* 五行: the color of every stem, branch and 十神 of that element */
-  --wood: #3c9a4b;
-  --fire: #e0433a;
-  --earth: #8f6a4b;
-  --metal: #cf9216;
-  --water: #3576d4;
+  /* 喜忌 (SPEC §4.5): a favorable element's stem or branch is blue, an unfavorable one's red; what stands beside
+     it takes the other color. */
+  --blue: #2b4bda;
+  --red: #c8051b;
+
+  /* 五色, the 五行 mode's colors. 金 is white, outlined in gray. */
+  --wood: #0a8a48;
+  --fire: #c9292e;
+  --earth: #ba9d74;
+  --metal: #a8a8a8;
+  --water: #010101;
+
+  /* 刑冲会合 lines: 冲 and 刑 dark green, the 合 family light green. */
+  --clash: #016637;
+  --combine: #34a84a;
+
+  --natal: #f5f5f5;
+  --divider: #dcdcdc;
 
   /* One unit of the layout: 1px on a phone, growing on an iPad until the 390-unit column fills its width. */
   --u: clamp(1px, 100vw / 430, 1.5px);
   /* How wide the screens' content runs: the 390 units, or up to 480 px while the unit is small. */
   --column: max(480px, 390 * var(--u));
+  /* The chart's width, and a column's: six columns fit, 12 units in from each edge. */
+  --page: min(100vw, var(--column));
+  --colw: calc((var(--page) - 24 * var(--u)) / 6);
 
   color-scheme: light;
   font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Noto Sans CJK SC",
@@ -72,739 +82,1069 @@ p {
   stroke-linejoin: round;
 }
 
-/* 五行 colors. --c carries the color to dots, marks and lines. */
-.el-wood { --c: var(--wood); color: var(--c); }
-.el-fire { --c: var(--fire); color: var(--c); }
-.el-earth { --c: var(--earth); color: var(--c); }
-.el-metal { --c: var(--metal); color: var(--c); }
-.el-water { --c: var(--water); color: var(--c); }
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
 
-/* ── input screen ── */
-.band {
-  height: calc(230 * var(--u) + env(safe-area-inset-top));
-  background: linear-gradient(160deg, #8d4aa8 0%, var(--accent) 55%, #5e2a78 100%);
+button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+/* ── segmented controls: 男 女, 算次日 算当日, 十神 藏干 更多, and the views ── */
+.segmented {
+  display: flex;
+  height: calc(28.2 * var(--u));
+  padding: calc(2 * var(--u));
+  border-radius: calc(9 * var(--u));
+  background: #eeeeef;
+}
+
+.seg {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  border-radius: calc(7 * var(--u));
+  background: none;
+  color: var(--ink);
+  font-size: calc(13 * var(--u));
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+/* A hairline between two segments, hidden beside the pressed one. */
+.seg + .seg::before {
+  content: "";
+  position: absolute;
+  top: 27%;
+  bottom: 27%;
+  left: -0.5px;
+  width: 1px;
+  background: #c9c9cd;
+}
+
+.seg[aria-pressed="true"]::before,
+.seg[aria-pressed="true"] + .seg::before {
+  opacity: 0;
+}
+
+.seg[aria-pressed="true"] {
+  background: #ffffff;
+  box-shadow: 0 calc(3 * var(--u)) calc(8 * var(--u)) rgba(0, 0, 0, 0.12), 0 calc(1 * var(--u)) calc(1 * var(--u)) rgba(0, 0, 0, 0.04);
+  font-weight: 600;
+}
+
+.seg:active,
+.back:active,
+.group-row:active,
+.now-card:active,
+.info-tab:active,
+.strip-btn:active,
+.clear:active,
+.sheet-btn:active {
+  opacity: 0.6;
+}
+
+/* ── input screen (SPEC §3): grouped rows on a light gray page ── */
+.input-screen {
+  min-height: 100vh;
+  min-height: 100dvh;
+  background: #f0eff5;
+}
+
+.input-top {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: calc(35.6 * var(--u) + env(safe-area-inset-top));
+  padding-top: env(safe-area-inset-top);
+  border-bottom: 1px solid #d1d0d4;
+  background: #ffffff;
+}
+
+.input-title {
+  font-size: calc(18 * var(--u));
+  font-weight: 600;
 }
 
 .input-main {
-  position: relative;
-  max-width: var(--column);
-  margin: calc(-150 * var(--u)) auto 0;
-  padding: 0 calc(20 * var(--u)) calc(40 * var(--u) + env(safe-area-inset-bottom));
+  padding: calc(31.2 * var(--u)) 0 calc(32 * var(--u) + env(safe-area-inset-bottom));
 }
 
-.card {
-  border-radius: calc(14 * var(--u));
-  background: #ffffff;
-  box-shadow: 0 calc(2 * var(--u)) calc(10 * var(--u)) rgba(0, 0, 0, 0.14);
-}
-
-.input-card {
-  padding: calc(18 * var(--u)) calc(16 * var(--u)) calc(18 * var(--u));
-}
-
-.title {
-  margin-bottom: calc(14 * var(--u));
-  color: var(--accent);
-  font-size: calc(22 * var(--u));
-  font-weight: 800;
-  letter-spacing: 0.04em;
-}
-
-.fields {
-  display: grid;
-  grid-template-columns: max-content minmax(0, 1fr);
-  grid-auto-rows: minmax(calc(38 * var(--u)), auto);
-  align-items: center;
-  gap: calc(10 * var(--u)) calc(4 * var(--u));
-  font-size: calc(16 * var(--u));
-}
-
-.field {
-  display: contents;
-}
-
-.label {
-  color: var(--accent);
-  font-weight: 600;
-  white-space: nowrap;
-}
-
-.value {
-  min-width: 0;
-}
-
-.pillars-preview {
-  color: var(--ink-2);
-  font-size: calc(17 * var(--u));
-  letter-spacing: 0.08em;
-}
-
-.choice {
-  display: flex;
-  gap: calc(6 * var(--u));
-}
-
-.choice-btn {
-  flex: 1;
-  height: calc(36 * var(--u));
-  padding: 0 calc(6 * var(--u));
-  border: 1px solid #cfcfd4;
-  border-radius: calc(18 * var(--u));
-  background: #ffffff;
-  font-size: calc(15 * var(--u));
-  white-space: nowrap;
-}
-
-.choice-btn[aria-pressed="true"] {
-  border-color: var(--accent);
-  background: var(--accent);
-  color: #ffffff;
-}
-
-/* The date field: a button that opens the wheels. */
-.picker {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: calc(6 * var(--u));
+/* A white band between hairlines. On a wide screen it keeps to the column. */
+.group {
+  display: block;
   width: 100%;
-  height: calc(38 * var(--u));
-  padding: 0 calc(8 * var(--u));
-  border: 1px solid #cfcfd4;
-  border-radius: calc(8 * var(--u));
+  max-width: var(--column);
+  margin: 0 auto;
+  border: 0;
+  border-top: 1px solid #cfcfcf;
+  border-bottom: 1px solid #c6c5c7;
   background: #ffffff;
+}
+
+.group-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: 0 calc(20 * var(--u)) 0 calc(18.5 * var(--u));
+  border: 0;
+  background: none;
+  color: var(--ink);
   font-size: calc(16 * var(--u));
-  font-variant-numeric: tabular-nums;
+  line-height: calc(20 * var(--u));
   text-align: left;
 }
 
-.picker-text {
-  min-width: 0;
-  overflow: hidden;
+/* Rows are parted by hairlines that start where the text does. */
+.group-row + .group-row::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: calc(18.5 * var(--u));
+  height: 1px;
+  background: #c5c5c5;
+}
+
+.gender-row {
+  justify-content: center;
+  height: calc(58.2 * var(--u));
+}
+
+.gender-row .segmented {
+  width: calc(263.5 * var(--u));
+  height: calc(37.5 * var(--u));
+}
+
+.gender-row .seg {
+  font-size: calc(14 * var(--u));
+}
+
+/* 出生日期 and the minute on two lines at the right, the name level with the first. */
+.birth-row {
+  align-items: flex-start;
+  height: calc(54.8 * var(--u));
+  padding-top: calc(9.2 * var(--u));
+}
+
+.row-label {
+  flex: 1;
+}
+
+.birth-value {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  color: #384d73;
+  font-weight: 500;
   white-space: nowrap;
-  text-overflow: ellipsis;
 }
 
-.calendar-icon {
+.row-chevron {
   flex: none;
+  align-self: center;
   width: calc(22 * var(--u));
-  height: calc(22 * var(--u));
-  color: #444448;
+  height: calc(33.7 * var(--u));
+  margin: calc(-9.2 * var(--u)) calc(-0.3 * var(--u)) 0 calc(8.4 * var(--u));
+  color: #c3c3c3;
+  stroke-width: 2.6;
 }
 
-.note {
-  margin-top: calc(14 * var(--u));
-  color: var(--gray);
-  font-size: calc(12.5 * var(--u));
-  line-height: 1.5;
+.late-zi-row {
+  gap: calc(12 * var(--u));
+  height: calc(48 * var(--u));
 }
 
-.btn {
-  display: block;
-  width: 100%;
-  height: calc(50 * var(--u));
-  border: 0;
-  border-radius: calc(12 * var(--u));
-  font-size: calc(17 * var(--u));
-  font-weight: 700;
+.late-zi-row .segmented {
+  width: calc(150 * var(--u));
 }
 
-.btn:active,
-.picker:active,
-.choice-btn:active {
-  filter: brightness(0.94);
+.cast-row {
+  height: calc(39.2 * var(--u));
+  color: var(--accent);
+  font-size: calc(16.5 * var(--u));
+  font-weight: 500;
 }
 
-.btn.primary {
-  margin-top: calc(36 * var(--u));
-  background: var(--accent);
-  box-shadow: 0 calc(3 * var(--u)) calc(10 * var(--u)) rgba(123, 58, 150, 0.35);
-  color: #ffffff;
+/* 时空起盘: the present moment's pillars at the left, the moment at the right, the label under both. */
+.now-card {
+  position: relative;
+  height: calc(103.7 * var(--u));
+  margin-top: calc(18.5 * var(--u));
+  padding: 0;
+  color: #a5a5a5;
+  text-align: left;
 }
 
-.btn.secondary {
-  margin-top: calc(14 * var(--u));
-  background: #ffffff;
-  box-shadow: 0 calc(1 * var(--u)) calc(5 * var(--u)) rgba(0, 0, 0, 0.14);
-  color: var(--ink);
+.now-pillars {
+  position: absolute;
+  top: calc(18.3 * var(--u));
+  left: calc(33.5 * var(--u));
+  display: flex;
+  flex-direction: column;
+  font-size: calc(25 * var(--u));
+  line-height: calc(28.4 * var(--u));
+  letter-spacing: calc(5 * var(--u));
+  white-space: nowrap;
 }
 
-.picker:focus-visible,
-.btn:focus-visible,
-.choice-btn:focus-visible,
-.seg-btn:focus-visible,
-.flow-tab:focus-visible,
-.flow-card:focus-visible,
-.icon-btn:focus-visible,
-.close:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
+.now-text {
+  position: absolute;
+  top: calc(8.7 * var(--u));
+  right: calc(25 * var(--u));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  font-size: calc(15.5 * var(--u));
+  line-height: calc(18.75 * var(--u));
+  white-space: nowrap;
 }
 
-/* ── chart screen ── */
+.now-label {
+  position: absolute;
+  top: calc(84.3 * var(--u));
+  right: 0;
+  left: 0;
+  color: var(--accent);
+  font-size: calc(16.5 * var(--u));
+  font-weight: 600;
+  line-height: 1;
+  text-align: center;
+  transform: translateY(-50%);
+}
+
+/* ── chart screen (SPEC §5): the bars, and between them the columns and the view ── */
 .chart-screen {
+  /* Where a column's header sits, in units from its top: the middle of its level's name (or tag), of the age line
+     (where 时 日 月 年 stand too) and of the year line; then the top of the pillar's characters, and the height
+     above the rule. 流运 and 神煞 draw the header lower. */
+  --tag-y: 11.2;
+  --age-y: 27.8;
+  --year-y: 40.2;
+  --pillar-y: 48.5;
+  --top-h: 206;
+
   display: flex;
   flex-direction: column;
   height: 100vh;
   height: 100dvh;
-  max-width: calc(var(--column) + 80px);
-  margin: 0 auto;
+  background: #ffffff;
 }
 
-.topbar {
+.chart-screen[data-view="流运"],
+.chart-screen[data-view="神煞"] {
+  --tag-y: 16.7;
+  --age-y: 37.1;
+  --year-y: 49.3;
+  --pillar-y: 66.6;
+}
+
+.chart-screen[data-view="关系"] {
+  --top-h: 128;
+}
+
+.chart-frame {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
+/* 返回 · 十神 藏干 更多. The bar runs edge to edge; on a wide screen its buttons keep to the column. */
+.chart-top {
   flex: none;
   display: grid;
   grid-template-columns: 1fr auto 1fr;
   align-items: center;
-  padding: calc(env(safe-area-inset-top) + 8 * var(--u)) calc(12 * var(--u)) calc(6 * var(--u));
-}
-
-.close {
-  justify-self: start;
-  height: calc(34 * var(--u));
-  padding: 0 calc(14 * var(--u));
-  border: 0;
-  border-radius: calc(17 * var(--u));
-  background: var(--fill);
-  color: var(--ink);
-  font-size: calc(15 * var(--u));
-}
-
-.topbar-side {
-  justify-self: end;
-  color: var(--gray);
-  font-size: calc(14 * var(--u));
-}
-
-.segmented {
-  display: flex;
-  padding: calc(2 * var(--u));
-  border-radius: calc(10 * var(--u));
-  background: #ececf0;
-}
-
-.seg-btn {
-  min-width: calc(54 * var(--u));
-  height: calc(30 * var(--u));
-  padding: 0 calc(10 * var(--u));
-  border: 0;
-  border-radius: calc(8 * var(--u));
-  background: none;
-  color: var(--ink-2);
-  font-size: calc(14 * var(--u));
-}
-
-.seg-btn[aria-pressed="true"] {
+  height: calc(36 * var(--u) + env(safe-area-inset-top));
+  padding: calc(2 * var(--u) + env(safe-area-inset-top)) max(0px, (100% - var(--page)) / 2) calc(5.8 * var(--u));
+  border-bottom: 1px solid #d3d3d3;
   background: #ffffff;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.14);
-  color: var(--ink);
-  font-weight: 600;
+}
+
+.back {
+  justify-self: start;
+  height: 100%;
+  padding: 0 calc(19 * var(--u));
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font-size: calc(18 * var(--u));
+  font-weight: 500;
+}
+
+.modes {
+  width: calc(165.7 * var(--u));
 }
 
 .chart-main {
+  display: flex;
   flex: 1;
+  flex-direction: column;
+  width: var(--page);
   min-height: 0;
-  overflow: auto;
-  padding: 0 calc(6 * var(--u)) calc(16 * var(--u));
-  -webkit-overflow-scrolling: touch;
+  margin: 0 auto;
+  overflow: hidden;
 }
 
-.chart-heading {
-  padding: calc(2 * var(--u)) calc(6 * var(--u)) calc(8 * var(--u));
-  color: var(--ink-2);
+/* 资料 流运 神煞 关系 */
+.chart-bottom {
+  flex: none;
+  display: flex;
+  justify-content: center;
+  padding: calc(5.5 * var(--u)) 0 max(calc(5.5 * var(--u)), calc(3 * var(--u) + env(safe-area-inset-bottom)));
+  border-top: 1px solid #c7c7c7;
+  background: #f9f9f9;
+}
+
+.views {
+  width: calc(203 * var(--u));
+  height: calc(28.7 * var(--u));
+}
+
+/* ── the columns: 时 日 月 年 on gray, then the flows on white, each 61 units wide; more than six scroll sideways ── */
+.cols-scroll {
+  flex: none;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+}
+
+.cols-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+/* In 神煞 the columns run down to the bottom bar, their lists under the rule. */
+.chart-screen[data-view="神煞"] .cols-scroll {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.cols {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(var(--n), var(--colw));
+  width: max-content;
+  min-width: 100%;
+  min-height: 100%;
+  padding: 0 calc(12 * var(--u));
+}
+
+/* The rule under the pillars, edge to edge. 关系 has none. */
+.cols::after {
+  content: "";
+  position: absolute;
+  top: calc(var(--top-h) * var(--u) - 1px);
+  right: 0;
+  left: 0;
+  height: 1px;
+  background: #666666;
+}
+
+.col {
+  position: relative;
+  min-width: 0;
+}
+
+.col.natal {
+  background: var(--natal);
+}
+
+/* Each column's left edge. Between two natal columns or two flows it starts under the tag line; the natal
+   columns' outer edges and the chart's right edge run the whole height. */
+.col::before {
+  content: "";
+  position: absolute;
+  top: calc(18.5 * var(--u));
+  bottom: 0;
+  left: 0;
+  width: 1px;
+  background: var(--divider);
+}
+
+.col.flow::before {
+  background: #e3e3e3;
+}
+
+.col:first-child::before,
+.col.flow:nth-child(5)::before {
+  top: 0;
+  background: var(--divider);
+}
+
+.col:last-child::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: -1px;
+  bottom: 0;
+  width: 1px;
+  background: #dfdfdf;
+}
+
+.col-top {
+  position: relative;
+  height: calc(var(--top-h) * var(--u));
+}
+
+/* The header: 时 日 月 年 in gray; a flow's level, then what is chosen there on two lines. */
+.col-head {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  height: calc((var(--year-y) + 9) * var(--u));
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #6a6a6a;
+}
+
+.col-label,
+.col-big,
+.col-small {
+  position: absolute;
+  right: 0;
+  left: 0;
+  line-height: 1;
+  text-align: center;
+  white-space: nowrap;
+  transform: translateY(-50%);
+}
+
+.col-label {
+  top: calc(var(--tag-y) * var(--u));
+  color: #909090;
+  font-size: calc(13.5 * var(--u));
+}
+
+.natal .col-label {
+  top: calc(var(--age-y) * var(--u));
+  color: #919191;
   font-size: calc(13 * var(--u));
-  font-weight: 500;
-  outline: none;
 }
 
-.chart-heading .qiankun {
-  color: var(--accent);
+/* The level the grid lists */
+.col-label.tag {
+  right: auto;
+  left: 50%;
+  width: calc(38 * var(--u));
+  height: calc(17.3 * var(--u));
+  margin-left: calc(-19 * var(--u));
+  border-radius: calc(2.5 * var(--u));
+  background: var(--accent);
+  color: #ffffff;
+  font-size: calc(13 * var(--u));
+  line-height: calc(17.3 * var(--u));
+}
+
+/* A level that can't be reached yet */
+.col-label.off {
+  color: #cfcfcf;
+}
+
+.col-big {
+  top: calc(var(--age-y) * var(--u));
+  font-size: calc(16 * var(--u));
   font-weight: 700;
 }
 
-.chart-heading .lunar {
-  color: var(--gray);
+.col-small {
+  top: calc(var(--year-y) * var(--u));
+  font-size: calc(12 * var(--u));
+}
+
+/* From 流月 down the first line is a name (a 节, a 时辰) and the second the figures: the second is the bold one. */
+.col[data-col="flow-2"] .col-big,
+.col[data-col="flow-3"] .col-big,
+.col[data-col="flow-4"] .col-big {
+  font-size: calc(13 * var(--u));
+  font-weight: 400;
+}
+
+.col[data-col="flow-2"] .col-small,
+.col[data-col="flow-3"] .col-small,
+.col[data-col="flow-4"] .col-small {
+  font-size: calc(14 * var(--u));
+  font-weight: 700;
+}
+
+.col-top > .pillar {
+  position: absolute;
+  top: calc(var(--pillar-y) * var(--u) - var(--ink-top));
+  right: 0;
+  left: 0;
+}
+
+/* ⊗ at the bottom left of a chosen flow column */
+.clear {
+  position: absolute;
+  bottom: calc(-1.9 * var(--u));
+  left: calc(-2.4 * var(--u));
+  display: grid;
+  place-items: center;
+  width: calc(30 * var(--u));
+  height: calc(30 * var(--u));
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #bfbfbf;
+}
+
+.clear .icon {
+  width: calc(19.4 * var(--u));
+  height: calc(19.4 * var(--u));
+  stroke-width: 1.1;
+}
+
+/* ── a pillar: the stem over the branch, each with what the mode puts at its right ── */
+.pillar {
+  --ch: calc(21 * var(--u));
+  --pitch: calc(22 * var(--u));
+  --an: calc(16.5 * var(--u));
+  --an-pitch: calc(18 * var(--u));
+  --gap: calc(0.5 * var(--u));
+  /* How far below the top of its line a character's ink starts */
+  --ink-top: calc(var(--ch) * 0.04);
+
+  position: relative;
+  display: block;
+  width: calc(var(--ch) + var(--gap) + var(--an));
+  margin: 0 auto;
+  white-space: nowrap;
+}
+
+.p-stem,
+.p-branch {
+  display: flex;
+  height: var(--pitch);
+}
+
+.p-char {
+  flex: none;
+  width: var(--ch);
+  font-size: var(--ch);
+  font-weight: 500;
+  line-height: 1;
+  text-align: center;
+}
+
+/* A stack may run below its line: it keeps its own height. */
+.p-side {
+  display: flex;
+  flex-direction: column;
+  align-self: flex-start;
+  margin-left: var(--gap);
+}
+
+.p-ann {
+  flex: none;
+  height: var(--an-pitch);
+  font-size: var(--an);
+  font-weight: 400;
+  line-height: 1;
+}
+
+/* 空: a gray tag under the branch */
+.kong {
+  position: absolute;
+  top: calc(var(--pitch) + var(--ch) + 4 * var(--u));
+  left: calc(-3 * var(--u));
+  width: calc(11.4 * var(--u));
+  height: calc(11.4 * var(--u));
+  border-radius: calc(1 * var(--u));
+  background: #aaaaaa;
+  color: #ffffff;
+  font-size: calc(9 * var(--u));
+  font-weight: 600;
+  line-height: calc(11.4 * var(--u));
+  text-align: center;
+}
+
+.ink-blue {
+  color: var(--blue);
+}
+
+.ink-red {
+  color: var(--red);
+}
+
+.wx-wood {
+  color: var(--wood);
+}
+
+.wx-fire {
+  color: var(--fire);
+}
+
+.wx-earth {
+  color: var(--earth);
+}
+
+.wx-metal {
+  color: #ffffff;
+  -webkit-text-stroke: calc(0.7 * var(--u)) var(--metal);
+}
+
+.wx-water {
+  color: var(--water);
+}
+
+/* ── 资料: the tabs on a gray bar, then the rows ── */
+.info-view {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.info-tabs {
+  display: flex;
+  gap: calc(27 * var(--u));
+  align-items: center;
+  height: calc(35.4 * var(--u));
+  padding: 0 calc(9.3 * var(--u));
+  border-bottom: 1px solid #c3c3c3;
+  background: #f2f2f2;
+}
+
+.info-tab {
+  width: calc(73 * var(--u));
+  height: calc(24 * var(--u));
+  padding: 0;
+  border: 0;
+  border-radius: calc(3 * var(--u));
+  background: none;
+  color: var(--accent);
+  font-size: calc(14 * var(--u));
+  font-weight: 500;
+}
+
+.info-tab[aria-pressed="true"] {
+  background: var(--accent);
+  color: #ffffff;
 }
 
 .info {
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: calc(5 * var(--u));
-  margin: 0 calc(4 * var(--u)) calc(10 * var(--u));
-  padding: calc(10 * var(--u)) calc(12 * var(--u));
-  border-radius: calc(12 * var(--u));
-  background: var(--fill);
-  font-size: calc(13 * var(--u));
-  line-height: 1.45;
+  padding: calc(10.5 * var(--u)) calc(12 * var(--u)) 0 calc(9.7 * var(--u));
 }
 
 .info-row {
   display: grid;
-  grid-template-columns: 2.6em minmax(0, 1fr);
-  gap: calc(6 * var(--u));
-}
-
-.info dt {
-  color: var(--gray);
-}
-
-.chart-scroll {
-  overflow-x: auto;
-  overscroll-behavior-x: contain;
-}
-
-/* The columns: equal widths, each at least 56 units, with hairlines between them from top to bottom. */
-.chart {
-  --col-min: calc(56 * var(--u));
-  position: relative;
-  min-width: calc(var(--n) * var(--col-min));
-  padding-bottom: calc(6 * var(--u));
-  background-image: linear-gradient(to left, var(--hair) 1px, transparent 1px);
-  background-size: calc(100% / var(--n)) 100%;
-}
-
-.row {
-  display: grid;
-  grid-template-columns: repeat(var(--n), minmax(0, 1fr));
-}
-
-.cell {
-  min-width: 0;
-  text-align: center;
-}
-
-.heads {
-  align-items: end;
-  padding-top: calc(4 * var(--u));
-}
-
-.head {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: flex-end;
-  min-height: calc(62 * var(--u));
-  color: var(--gray);
-  line-height: 1.15;
-}
-
-.head .big {
-  color: #7c7c80;
-  font-size: calc(21 * var(--u));
+  grid-template-columns: calc(62.9 * var(--u)) minmax(0, 1fr);
+  color: #3b3e4a;
+  font-size: calc(13.5 * var(--u));
   font-weight: 500;
-  white-space: nowrap;
+  line-height: calc(18 * var(--u));
 }
 
-.head .small {
-  font-size: calc(12.5 * var(--u));
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-
-.col-label {
-  margin-top: calc(2 * var(--u));
-  font-size: calc(12.5 * var(--u));
-}
-
-.head:not(.flow) .col-label {
-  color: var(--ink-2);
-  font-size: calc(13.5 * var(--u));
-}
-
-/* A stem with its 十神 at its upper right; a branch with its hidden stems stacked at its right. */
-.stem-cell,
-.branch-cell {
-  display: inline-flex;
-  align-items: flex-start;
-  line-height: 1;
-}
-
-.char {
-  font-size: calc(30 * var(--u));
-  font-weight: 400;
-  line-height: 1.1;
-}
-
-.god {
-  margin-left: calc(1 * var(--u));
-  padding-top: calc(2 * var(--u));
-  font-size: calc(16 * var(--u));
-}
-
-.hidden-stems {
+.info-row dd {
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  margin-left: calc(1 * var(--u));
-  padding-top: calc(10 * var(--u));
 }
 
-.hid {
-  font-size: calc(15 * var(--u));
-  line-height: 1.12;
-  white-space: nowrap;
-}
-
-.hid small {
-  margin-left: calc(0.5 * var(--u));
-  font-size: calc(9 * var(--u));
-}
-
-.stems .cell {
-  padding-top: calc(6 * var(--u));
-}
-
-.branches .cell {
-  min-height: calc(48 * var(--u));
-}
-
-.empty {
-  color: var(--gray-2);
-  font-size: calc(24 * var(--u));
-  line-height: 1.4;
-}
-
-/* Pair relations under each column: the relation in black, the other pillar in gray, each on its own line. */
-.pairs {
-  padding-top: calc(10 * var(--u));
-}
-
-.pairs .cell {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: calc(7 * var(--u));
-  padding: 0 calc(2 * var(--u));
-}
-
-.pair {
-  display: flex;
-  flex-direction: column;
-  font-size: calc(14 * var(--u));
-  line-height: 1.25;
-}
-
-.pair-name {
-  color: var(--ink);
-}
-
-.pair-other {
-  color: var(--gray);
-}
-
-/* Relation lines: stems above the pillars, branches below. */
-.lines {
-  position: relative;
-  padding: calc(4 * var(--u)) 0;
-}
-
-.line-row {
-  position: relative;
-  height: calc(31 * var(--u));
-}
-
-.seg {
-  position: absolute;
-  top: 50%;
-  height: calc(2 * var(--u));
-  transform: translateY(-50%);
-  background: linear-gradient(to right, var(--from), var(--to));
-  border-radius: 1px;
-}
-
-.seg.dashed {
-  -webkit-mask: repeating-linear-gradient(to right, #000 0 calc(6 * var(--u)), transparent calc(6 * var(--u)) calc(11 * var(--u)));
-  mask: repeating-linear-gradient(to right, #000 0 calc(6 * var(--u)), transparent calc(6 * var(--u)) calc(11 * var(--u)));
-}
-
-.dot {
-  position: absolute;
-  top: 50%;
-  z-index: 1;
-  display: grid;
-  place-items: center;
-  width: calc(23 * var(--u));
-  height: calc(23 * var(--u));
-  transform: translate(-50%, -50%);
-  border-radius: 50%;
-  font-size: calc(13 * var(--u));
-  line-height: 1;
-}
-
-.line-row.stem .dot {
-  border: calc(1.5 * var(--u)) solid var(--c);
-  background: #ffffff;
-}
-
-.line-row.branch .dot {
-  background: var(--c);
-  color: #ffffff;
-}
-
-/* The stretch of line between the first two dots, which holds the label (when it fits) and the 冲 arrow; or the
-   label alone, past the last dot or before the first (ChartScreen LineRow). Both stand above the dots. */
-.gap,
-.label-out {
-  position: absolute;
-  top: 50%;
-  z-index: 2;
-  display: flex;
-  align-items: center;
-  transform: translateY(-50%);
-}
-
-.arrow-slot {
-  display: flex;
-  flex: 1;
-  justify-content: center;
-}
-
-.arrow {
-  font-size: calc(20 * var(--u));
-  font-weight: 700;
-  line-height: 1;
-  transform: translateY(-6%);
-}
-
-.rel-label {
-  display: inline-flex;
-  flex: none;
-  align-items: center;
-  padding: calc(1 * var(--u)) calc(5 * var(--u));
-  border-radius: calc(6 * var(--u));
-  background: rgba(255, 255, 255, 0.94);
-  color: var(--ink);
-  font-size: calc(14.5 * var(--u));
-  white-space: nowrap;
-}
-
-.badge {
-  display: inline-grid;
-  place-items: center;
-  min-width: calc(15 * var(--u));
-  height: calc(15 * var(--u));
-  margin-right: calc(3 * var(--u));
-  padding: 0 calc(3 * var(--u));
-  border-radius: calc(4 * var(--u));
-  background: #636366;
-  color: #ffffff;
-  font-size: calc(10.5 * var(--u));
-  font-weight: 600;
-}
-
-/* 神煞, one per line under each column. */
-.shensha {
-  padding-top: calc(10 * var(--u));
-}
-
-.shensha .cell {
-  display: flex;
-  flex-direction: column;
-  gap: calc(3 * var(--u));
-  padding: 0 calc(2 * var(--u));
-}
-
-.sha {
-  color: var(--ink-2);
-  font-size: calc(13 * var(--u));
-  line-height: 1.3;
-}
-
-.sha.good {
+.estimate {
+  padding: calc(5 * var(--u)) calc(12 * var(--u)) calc(16 * var(--u)) calc(9.7 * var(--u));
   color: var(--accent);
-}
-
-/* 大盘: 纳音, 星运, 自坐, 空亡, each under a caption. */
-.detail .caption {
-  margin-top: calc(8 * var(--u));
-  padding: calc(4 * var(--u)) calc(6 * var(--u)) calc(2 * var(--u));
-  border-top: 1px solid var(--hair);
-  background: #ffffff;
-  color: var(--gray);
-  font-size: calc(11.5 * var(--u));
-}
-
-.detail .cell {
-  padding: calc(3 * var(--u)) calc(2 * var(--u));
-  color: var(--ink-2);
   font-size: calc(13.5 * var(--u));
-}
-
-/* ── the flow panel ── */
-.flow-panel {
-  flex: none;
-  display: flex;
-  flex-direction: column;
-  max-height: 50vh;
-  max-height: 50dvh;
-  padding-bottom: env(safe-area-inset-bottom);
-  border-radius: calc(20 * var(--u)) calc(20 * var(--u)) 0 0;
-  background: #f5f5f8;
-  box-shadow: 0 calc(-2 * var(--u)) calc(16 * var(--u)) rgba(0, 0, 0, 0.12);
-}
-
-.flow-bar {
-  flex: none;
-  display: flex;
-  align-items: center;
-  gap: calc(4 * var(--u));
-  padding: calc(8 * var(--u)) calc(8 * var(--u)) calc(6 * var(--u));
-}
-
-.icon-btn {
-  flex: none;
-  display: grid;
-  place-items: center;
-  width: calc(38 * var(--u));
-  height: calc(38 * var(--u));
-  padding: 0;
-  border: 0;
-  border-radius: 50%;
-  background: none;
-  color: var(--accent);
-}
-
-.icon-btn svg {
-  width: calc(22 * var(--u));
-  height: calc(22 * var(--u));
-}
-
-.flow-tabs {
-  flex: 1;
-  display: flex;
-  padding: calc(2 * var(--u));
-  border-radius: calc(11 * var(--u));
-  background: #e6e6eb;
-}
-
-.flow-tab {
-  flex: 1;
-  height: calc(32 * var(--u));
-  padding: 0;
-  border: 0;
-  border-radius: calc(9 * var(--u));
-  background: none;
-  color: var(--ink-2);
-  font-size: calc(14.5 * var(--u));
-  white-space: nowrap;
-}
-
-.flow-tab[aria-pressed="true"] {
-  background: #ffffff;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.14);
-  color: var(--ink);
   font-weight: 600;
+  line-height: calc(18 * var(--u));
 }
 
-.flow-cards {
+/* ── 流运: the grid of the listed level, its rows sharing the height, and the strip at its right ── */
+.flow-view {
   display: flex;
-  align-items: flex-start;
-  gap: calc(4 * var(--u));
+  flex: 1;
   min-height: 0;
-  overflow: auto;
-  padding: calc(4 * var(--u)) calc(8 * var(--u)) calc(12 * var(--u));
-  overscroll-behavior: contain;
 }
 
-.flow-card {
-  flex: none;
-  display: flex;
-  flex-direction: column;
-  gap: calc(4 * var(--u));
-  width: calc(94 * var(--u));
-  padding: calc(8 * var(--u)) calc(6 * var(--u)) calc(10 * var(--u));
-  border: 1px solid transparent;
-  border-radius: calc(12 * var(--u));
-  background: none;
+.grid {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(var(--per-row), minmax(0, 1fr));
+  grid-auto-rows: minmax(calc(150 * var(--u)), 1fr);
+  min-width: 0;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+}
+
+.grid-cell {
+  position: relative;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  border-top: 1px solid #d1d1d1;
+  background: #ffffff;
+  color: #6a6a6a;
   text-align: left;
 }
 
-.flow-card[aria-pressed="true"] {
-  border-color: #d6d6db;
-  background: #ffffff;
-  box-shadow: 0 1px 5px rgba(0, 0, 0, 0.08);
+/* The first row starts at the rule. */
+.grid[data-per-row="5"] .grid-cell:nth-child(-n + 5),
+.grid[data-per-row="6"] .grid-cell:nth-child(-n + 6) {
+  border-top: 0;
 }
 
-.card-head {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  color: var(--gray);
-  line-height: 1.1;
+/* Cells are parted by darker lines that start under the first line of their heads. */
+.grid-cell::before {
+  content: "";
+  position: absolute;
+  top: calc(11.4 * var(--u));
+  bottom: 0;
+  left: 0;
+  width: 1px;
+  background: #adadad;
 }
 
-.card-head .big {
-  color: #7c7c80;
-  font-size: calc(19 * var(--u));
-  font-weight: 500;
+.grid[data-per-row="5"] .grid-cell:nth-child(5n + 1)::before,
+.grid[data-per-row="6"] .grid-cell:nth-child(6n + 1)::before {
+  content: none;
+}
+
+/* 交运: gray for the part of the year before it */
+.grid-cell.jiao-yun {
+  background: linear-gradient(to right, #cccccc calc(var(--jy) * 100%), #ffffff 0);
+}
+
+.grid-cell.chosen {
+  background: #f3e9f8;
+}
+
+.grid-cell.jiao-yun.chosen {
+  background: linear-gradient(to right, #cccccc calc(var(--jy) * 100%), #f3e9f8 0);
+}
+
+.cell-head {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: calc(6 * var(--u));
+}
+
+.cell-big,
+.cell-small {
+  position: absolute;
+  left: 0;
+  line-height: 1;
   white-space: nowrap;
+  transform: translateY(-50%);
 }
 
-.card-head .small {
-  font-size: calc(12 * var(--u));
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-
-.card-pillar {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: calc(2 * var(--u));
-  min-height: calc(64 * var(--u));
-}
-
-.card-pillar .char {
-  font-size: calc(27 * var(--u));
-}
-
-.card-pillar .hidden-stems {
-  padding-top: calc(7 * var(--u));
-}
-
-.card-pillar.tong {
-  justify-content: center;
-  color: var(--gray);
+.cell-big {
+  top: calc(27.4 * var(--u));
   font-size: calc(16 * var(--u));
+  font-weight: 700;
 }
 
-.card-rels {
+.cell-small {
+  top: calc(39.8 * var(--u));
+  font-size: calc(12 * var(--u));
+}
+
+.grid.level-2 .cell-big,
+.grid.level-4 .cell-big {
+  font-size: calc(13 * var(--u));
+  font-weight: 400;
+}
+
+.grid.level-2 .cell-small,
+.grid.level-3 .cell-small,
+.grid.level-4 .cell-small {
+  font-size: calc(14 * var(--u));
+  font-weight: 700;
+}
+
+.grid-cell .pillar {
+  --ch: calc(23 * var(--u));
+  --pitch: calc(25 * var(--u));
+  --gap: calc(2 * var(--u));
+
+  position: absolute;
+  top: calc(66.6 * var(--u) - var(--ink-top));
+  right: 0;
+  left: 0;
+}
+
+/* The level above: ^ steps it back, ˅ on. */
+.strip {
+  flex: none;
   display: flex;
   flex-direction: column;
-  gap: calc(2 * var(--u));
+  align-items: center;
+  justify-content: space-between;
+  width: calc(24 * var(--u));
+  border-left: 1px solid #adadad;
+  box-shadow: inset 2px 0 0 #e8e8e8;
+  background: #ffffff;
 }
 
-.ce {
-  display: block;
+.grid.level-1 + .strip {
+  width: calc(27 * var(--u));
+}
+
+.strip-btn {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: calc(40 * var(--u));
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+}
+
+.chevron {
+  width: calc(18 * var(--u));
+  height: calc(10.5 * var(--u));
+  stroke-width: 1.6;
+}
+
+.strip-text {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   color: var(--ink);
-  font-size: calc(12.5 * var(--u));
-  line-height: 1.4;
+  font-size: calc(15 * var(--u));
+  line-height: 1.2;
+  white-space: nowrap;
 }
 
-.ce .pair-other {
-  margin: 0 calc(1 * var(--u));
+/* ── 神煞: 星运 and 自坐 in brown, then the stars, one to a line ── */
+.sha-list {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: calc(4 * var(--u)) 0 calc(12 * var(--u));
+  color: #505050;
+  font-size: calc(16 * var(--u));
+  line-height: calc(20 * var(--u));
+  white-space: nowrap;
 }
 
-.mark {
-  display: inline-block;
-  width: calc(8 * var(--u));
-  height: calc(8 * var(--u));
-  margin-right: calc(3 * var(--u));
-  border-radius: 50%;
-  vertical-align: 0.05em;
+.xing {
+  color: #946436;
 }
 
-.mark.stem {
-  border: calc(1.5 * var(--u)) solid var(--c);
+.xing + .sha {
+  margin-top: calc(5.3 * var(--u));
 }
 
-.mark.branch {
+/* Four characters don't fit a column at the size of three. */
+.sha.long {
+  font-size: calc(13 * var(--u));
+}
+
+/* ── 关系: the columns run to the bottom bar; stem lines above the headers, branch lines under the pillars ── */
+.rel-scroll {
+  flex: 1;
+  overflow: auto;
+}
+
+.rel-view {
+  position: relative;
+  width: max-content;
+  min-width: 100%;
+  min-height: 100%;
+  padding: 0 calc(12 * var(--u)) calc(12 * var(--u));
+}
+
+.col-bgs {
+  position: absolute;
+  top: 0;
+  right: calc(12 * var(--u));
+  bottom: 0;
+  left: calc(12 * var(--u));
+  display: grid;
+  grid-template-columns: repeat(var(--n), var(--colw));
+}
+
+.col-bg {
+  border-left: 1px solid #e3e3e3;
+}
+
+.col-bg.natal,
+.col-bg.flow:nth-child(5) {
+  border-left-color: var(--divider);
+}
+
+.col-bg.natal {
+  background: var(--natal);
+}
+
+.col-bg:last-child {
+  border-right: 1px solid #dfdfdf;
+}
+
+.rel-view .cols {
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+}
+
+.rel-view .cols::after,
+.rel-view .col::before,
+.rel-view .col::after {
+  content: none;
+}
+
+.rel-view .col.natal {
+  background: none;
+}
+
+.rel-lines {
+  position: relative;
+}
+
+/* One relation to a row: a line through its characters' dots, its label above the middle. */
+.rel-row {
+  --c: var(--combine);
+  --line-y: calc(25.8 * var(--u));
+
+  position: relative;
+  height: calc(35.5 * var(--u));
+}
+
+.rel-row.clash {
+  --c: var(--clash);
+}
+
+.rel-seg {
+  position: absolute;
+  top: calc(var(--line-y) - 0.5px);
+  left: calc((var(--from) + 0.5) * var(--colw));
+  width: calc((var(--to) - var(--from)) * var(--colw));
+  height: 1px;
   background: var(--c);
 }
 
-.ce .badge {
-  min-width: calc(13 * var(--u));
-  height: calc(13 * var(--u));
+.rel-dot {
+  position: absolute;
+  top: calc(var(--line-y) - 7.5 * var(--u));
+  left: calc((var(--at) + 0.5) * var(--colw) - 7.5 * var(--u));
+  width: calc(15 * var(--u));
+  height: calc(15 * var(--u));
+  border-radius: 50%;
   font-size: calc(9.5 * var(--u));
+  font-weight: 600;
+  line-height: calc(15 * var(--u));
+  text-align: center;
+}
+
+/* A branch: filled, its character white */
+.rel-dot.filled {
+  background: var(--c);
+  color: #ffffff;
+}
+
+/* A stem: a ring around its character */
+.rel-dot.ring {
+  border: 1px solid var(--c);
+  background: #ffffff;
+  color: var(--c);
+  line-height: calc(15 * var(--u) - 2px);
+}
+
+.rel-label {
+  position: absolute;
+  top: calc(var(--line-y) - 14.8 * var(--u));
+  left: calc((var(--from) + var(--to) + 1) / 2 * var(--colw));
+  color: var(--c);
+  font-size: calc(14 * var(--u));
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  transform: translate(-50%, -50%);
+}
+
+.rel-label b {
+  font-weight: 700;
+}
+
+.rel-label small {
+  margin-left: calc(1.5 * var(--u));
+  font-size: calc(12 * var(--u));
+}
+
+/* ── 更多: 十神 藏干 五行 in one group, 取消 apart, as an iOS action sheet ── */
+.more-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  touch-action: none;
+}
+
+.more-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.2);
+  animation: sheet-dim 0.2s ease-out;
+}
+
+.more-sheet {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: calc(8.4 * var(--u));
+  width: 100%;
+  max-width: var(--column);
+  margin: 0 auto;
+  padding: 0 calc(7.2 * var(--u)) max(calc(8 * var(--u)), env(safe-area-inset-bottom));
+  animation: sheet-rise 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.more-group {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: calc(13 * var(--u));
+  background: rgba(239, 239, 239, 0.94);
+  -webkit-backdrop-filter: blur(calc(20 * var(--u)));
+  backdrop-filter: blur(calc(20 * var(--u)));
+}
+
+.sheet-btn {
+  height: calc(99.5 * var(--u));
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font-size: calc(45 * var(--u));
+  font-weight: 500;
+}
+
+.sheet-btn + .sheet-btn {
+  border-top: 1px solid #c8c8c8;
+}
+
+.sheet-btn.cancel {
+  border-radius: calc(13 * var(--u));
+  background: #ffffff;
+  font-weight: 700;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .more-sheet,
+  .more-backdrop {
+    animation: none;
+  }
 }
 
 /* ── the date picker: a sheet of five wheels. As in qmdj, measured from 玄天排盘's date picker,
@@ -1021,6 +1361,6 @@ p {
 }
 
 .wheel:focus-visible {
-  background: rgba(123, 58, 150, 0.08);
+  background: rgba(136, 0, 163, 0.08);
 }
 

@@ -1,48 +1,85 @@
-// How a pillar and a relation label are drawn, shared by the chart's columns and the flow panel's cards.
-import { STEM_ELEMENT, BRANCH_ELEMENT, SHI_SHEN_NAME, type Pillar, type WuXing } from './bazi';
-import type { Part } from './relations';
+// How a pillar is drawn in the chart's columns and the flow grid (SPEC §5.2): the stem over the branch, each with
+// what the mode puts at its right, in the 喜忌 colors or in 五色; 空 under a branch the 日柱's 旬 leaves out.
+import { BRANCH_ELEMENT, SHI_SHEN_NAME, STEM_ELEMENT, type Pillar, type WuXing } from './bazi';
 
-const ELEMENT_CLASS: Readonly<Record<WuXing, string>> = { 木: 'wood', 火: 'fire', 土: 'earth', 金: 'metal', 水: 'water' };
+/** What stands beside each stem and branch: 十神, 藏干 or 五行 (更多 offers the third). */
+export type Mode = '十神' | '藏干' | '五行';
 
-/** The class that gives text, and the --c variable, an element's color. */
-export const el = (element: WuXing): string => `el-${ELEMENT_CLASS[element]}`;
+/** Whether each element is favorable, as `favorable` in bazi.ts gives it. */
+export type Fav = Readonly<Record<WuXing, boolean>>;
 
-/** An element's color, for inline styles. */
-export const color = (element: WuXing): string => `var(--${ELEMENT_CLASS[element]})`;
+const WX_CLASS: Readonly<Record<WuXing, string>> = { 木: 'wx-wood', 火: 'wx-fire', 土: 'wx-earth', 金: 'wx-metal', 水: 'wx-water' };
 
-/** The stem, and its 十神 beside it in the stem's color. The day master has none. */
-export function StemCell({ pillar }: { pillar: Pillar }) {
-  const cls = el(STEM_ELEMENT[pillar.stem]);
+/** The class that draws an element's character in 五色. */
+export const wx = (element: WuXing): string => WX_CLASS[element];
+
+/** The class for a stem or a branch of an element: blue when it is favorable, red when not. */
+export const ink = (fav: Fav, element: WuXing): string => (fav[element] ? 'ink-blue' : 'ink-red');
+
+/** The class for what stands beside one (a 十神, a 藏干, a 化神): the other color of the two. */
+export const inkBeside = (fav: Fav, element: WuXing): string => (fav[element] ? 'ink-red' : 'ink-blue');
+
+interface Side {
+  text: string;
+  cls: string;
+  title?: string;
+}
+
+/** What the mode puts beside the stem and beside the branch. */
+function sides(pillar: Pillar, mode: Mode, fav: Fav): { stem: Side[]; branch: Side[] } {
+  const stemElement = STEM_ELEMENT[pillar.stem];
+  const branchElement = BRANCH_ELEMENT[pillar.branch];
+  switch (mode) {
+    case '十神':
+      return {
+        stem: pillar.god ? [{ text: pillar.god, cls: inkBeside(fav, stemElement), title: SHI_SHEN_NAME[pillar.god] }] : [],
+        branch: pillar.hidden.map((h) => ({
+          text: h.god, cls: inkBeside(fav, STEM_ELEMENT[h.stem]), title: `${h.stem} ${SHI_SHEN_NAME[h.god]}`,
+        })),
+      };
+    case '藏干':
+      return { stem: [], branch: pillar.hidden.map((h) => ({ text: h.stem, cls: inkBeside(fav, STEM_ELEMENT[h.stem]) })) };
+    case '五行':
+      return {
+        stem: [{ text: stemElement, cls: wx(stemElement) }],
+        branch: [{ text: branchElement, cls: wx(branchElement) }],
+      };
+  }
+}
+
+function SideStack({ items }: { items: Side[] }) {
+  if (items.length === 0) return null;
   return (
-    <span className="stem-cell">
-      <span className={`char ${cls}`}>{pillar.stem}</span>
-      {pillar.god && <span className={`god ${cls}`} title={SHI_SHEN_NAME[pillar.god]}>{pillar.god}</span>}
+    <span className="p-side">
+      {items.map((s, i) => (
+        <span key={i} className={`p-ann ${s.cls}`} title={s.title}>{s.text}</span>
+      ))}
     </span>
   );
 }
 
-/** The branch, and beside it each hidden stem's 十神 with the stem itself small, 本气 first. */
-export function BranchCell({ pillar }: { pillar: Pillar }) {
+export interface PillarViewProps {
+  pillar: Pillar;
+  mode: Mode;
+  fav: Fav;
+  /** Whether its branch is one the 日柱's 旬 leaves out */
+  kong: boolean;
+}
+
+/** A pillar. Spans throughout, so it can sit inside a grid cell's button. */
+export function PillarView({ pillar, mode, fav, kong }: PillarViewProps) {
+  const s = sides(pillar, mode, fav);
   return (
-    <span className="branch-cell">
-      <span className={`char ${el(BRANCH_ELEMENT[pillar.branch])}`}>{pillar.branch}</span>
-      <span className="hidden-stems">
-        {pillar.hidden.map((h) => (
-          <span key={h.stem} className={`hid ${el(STEM_ELEMENT[h.stem])}`} title={`${h.stem} ${SHI_SHEN_NAME[h.god]}`}>
-            {h.god}
-            <small>{h.stem}</small>
-          </span>
-        ))}
+    <span className="pillar">
+      <span className="p-stem">
+        <span className={`p-char ${ink(fav, STEM_ELEMENT[pillar.stem])}`}>{pillar.stem}</span>
+        <SideStack items={s.stem} />
       </span>
+      <span className="p-branch">
+        <span className={`p-char ${ink(fav, BRANCH_ELEMENT[pillar.branch])}`}>{pillar.branch}</span>
+        <SideStack items={s.branch} />
+      </span>
+      {kong && <span className="kong" title="空亡">空</span>}
     </span>
-  );
-}
-
-/** A relation's label, its 化神 in that element's color: 合财成化. */
-export function Parts({ parts }: { parts: readonly Part[] }) {
-  return (
-    <>
-      {parts.map((p, i) => (p.element ? <span key={i} className={el(p.element)}>{p.text}</span> : p.text))}
-    </>
   );
 }

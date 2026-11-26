@@ -1,7 +1,11 @@
-// The app: what it remembers, as a pure reducer, and the browser glue around its two screens (history, focus).
-import { useEffect, useReducer, useRef } from 'react';
-import { castBazi, choose, pickAt, type Bazi, type FlowLevel, type Gender, type Pick, type Settings } from './bazi';
-import { ChartScreen, type View } from './ChartScreen';
+// The app: what it remembers, as a pure reducer, and the browser glue around its two screens (history, focus, the
+// clock the 时空起盘 card and 虚岁 read).
+import { useEffect, useReducer, useRef, useState } from 'react';
+import {
+  NO_FLOWS, castBazi, choose, clearFrom, showLevel, step,
+  type Bazi, type Flows, type Gender, type Settings,
+} from './bazi';
+import { ChartScreen, type InfoTab, type Mode, type View } from './ChartScreen';
 import { InputScreen } from './InputScreen';
 import { parseInput } from './time';
 
@@ -13,20 +17,24 @@ export interface Entry {
   input: string;
   gender: Gender;
   lateZi: Settings['lateZi'];
+  /** Cast by 时空起盘: `input` is the minute it was cast, not the input screen's birth minute */
+  now?: true;
 }
 
-export interface AppState extends Entry {
+export interface AppState {
   screen: 'input' | 'chart';
-  /** The last cast chart; it stays when the user goes back */
+  /** The input screen's choices */
+  input: string;
+  gender: Gender;
+  lateZi: Settings['lateZi'];
+  /** What the last chart was cast from: the input screen's choices, or the present minute for 时空起盘 */
+  cast: Entry | null;
+  /** The last chart; it stays when the user goes back */
   chart: Bazi | null;
-  /** The chart's tab: 大盘, 关系 or 神煞 */
+  mode: Mode;
   view: View;
-  /** The flow panel's tab */
-  level: FlowLevel;
-  /** What the flow panel has chosen at each level, for `chart` */
-  pick: Pick | null;
-  /** Whether the flow panel shows its cards */
-  panelOpen: boolean;
+  infoTab: InfoTab;
+  flows: Flows;
 }
 
 export type Action =
@@ -34,18 +42,24 @@ export type Action =
   | { type: 'setInput'; value: string }
   | { type: 'setGender'; gender: Gender }
   | { type: 'setLateZi'; lateZi: Settings['lateZi'] }
-  /** 排盘. `now` decides which 大运, 流年 … the panel starts on. */
-  | { type: 'cast'; now: string }
+  /** 起盘: the input screen's choices */
+  | { type: 'cast' }
+  /** 时空起盘: the present minute */
+  | { type: 'castNow'; now: string }
   /** A chart's history entry, on Forward or after a reload */
-  | { type: 'open'; entry: Entry; now: string }
+  | { type: 'open'; entry: Entry }
   | { type: 'back' }
+  | { type: 'setMode'; mode: Mode }
   | { type: 'setView'; view: View }
-  | { type: 'setLevel'; level: FlowLevel }
-  /** A card chosen in the flow panel */
-  | { type: 'choose'; level: FlowLevel; value: number }
-  /** The panel's clock: back to the 大运, 流年 … of `now` */
-  | { type: 'today'; now: string }
-  | { type: 'togglePanel' };
+  | { type: 'setInfoTab'; tab: InfoTab }
+  /** A cell chosen in the 流运 grid */
+  | { type: 'choose'; level: number; value: number }
+  /** A flow column tapped: the grid lists its level */
+  | { type: 'showLevel'; level: number }
+  /** ⊗ under a flow column */
+  | { type: 'clear'; level: number }
+  /** The strip's ^ (-1) or ˅ (1) */
+  | { type: 'step'; delta: 1 | -1 };
 
 /** `now` must be a real minute from 1900 to 2100, as clockInput gives. */
 export const initialState = (now: string): AppState => ({
@@ -53,23 +67,22 @@ export const initialState = (now: string): AppState => ({
   input: now,
   gender: '男',
   lateZi: 'next',
+  cast: null,
   chart: null,
-  view: 'relations',
-  level: 'year',
-  pick: null,
-  panelOpen: true,
+  mode: '十神',
+  view: '资料',
+  infoTab: '基本资料',
+  flows: NO_FLOWS,
 });
 
-const entryOf = ({ input, gender, lateZi }: Entry): Entry => ({ input, gender, lateZi });
 const sameEntry = (a: Entry, b: Entry) => a.input === b.input && a.gender === b.gender && a.lateZi === b.lateZi;
 
-/** The chart for an entry, shown with the flows of `now`; null if the entry's time isn't a real one. */
-function cast(state: AppState, entry: Entry, now: string): AppState | null {
+/** The chart for an entry, opened on 资料 in the 十神 mode with no flow chosen; null if its time isn't a real one. */
+function castEntry(state: AppState, entry: Entry): AppState | null {
   const time = parseInput(entry.input);
-  const clock = parseInput(now);
-  if (!time || !clock) return null;
+  if (!time) return null;
   const chart = castBazi(time, entry.gender, { lateZi: entry.lateZi });
-  return { ...state, ...entryOf(entry), chart, pick: pickAt(chart, clock), screen: 'chart' };
+  return { ...state, cast: entry, chart, screen: 'chart', mode: '十神', view: '资料', infoTab: '基本资料', flows: NO_FLOWS };
 }
 
 export function reducer(state: AppState, action: Action): AppState {
@@ -81,32 +94,39 @@ export function reducer(state: AppState, action: Action): AppState {
     case 'setLateZi':
       return { ...state, lateZi: action.lateZi };
     case 'cast':
-      return cast(state, state, action.now) ?? state;
-    case 'open':
-      // On Forward the chart is usually still here: show it as it was. After a reload, cast it again.
-      if (state.chart && sameEntry(state, action.entry)) return { ...state, screen: 'chart' };
-      return cast(state, action.entry, action.now) ?? { ...state, screen: 'input' };
+      return castEntry(state, { input: state.input, gender: state.gender, lateZi: state.lateZi }) ?? state;
+    case 'castNow':
+      return castEntry(state, { input: action.now, gender: state.gender, lateZi: state.lateZi, now: true }) ?? state;
+    case 'open': {
+      // On Forward the chart is usually still here: show it as it was. After a reload, cast it again, and put its
+      // choices back on the input screen, as 起盘 left them: the birth minute too, unless 时空起盘 cast it.
+      if (state.chart && state.cast && sameEntry(state.cast, action.entry)) return { ...state, screen: 'chart' };
+      const { input, gender, lateZi, now } = action.entry;
+      const choices = { input: now ? state.input : input, gender, lateZi };
+      return castEntry({ ...state, ...choices }, action.entry) ?? { ...state, screen: 'input' };
+    }
     case 'back':
       return { ...state, screen: 'input' };
+    case 'setMode':
+      return { ...state, mode: action.mode };
     case 'setView':
       return { ...state, view: action.view };
-    case 'setLevel':
-      return { ...state, level: action.level, panelOpen: true };
+    case 'setInfoTab':
+      return { ...state, infoTab: action.tab };
     case 'choose':
-      if (!state.chart || !state.pick) return state;
-      return { ...state, pick: choose(state.chart, state.pick, action.level, action.value) };
-    case 'today': {
-      const clock = parseInput(action.now);
-      return state.chart && clock ? { ...state, pick: pickAt(state.chart, clock) } : state;
-    }
-    case 'togglePanel':
-      return { ...state, panelOpen: !state.panelOpen };
+      return { ...state, flows: choose(state.flows, action.level, action.value) };
+    case 'showLevel':
+      return { ...state, flows: showLevel(state.flows, action.level) };
+    case 'clear':
+      return { ...state, flows: clearFrom(state.flows, action.level) };
+    case 'step':
+      return state.chart ? { ...state, flows: step(state.chart, state.flows, action.delta) } : state;
   }
 }
 
 // ── The two screens, and the browser around them ─────────────────────────────────────────────────────────────
 // Each cast pushes one history entry holding what it was cast from, so the back gesture returns to the input
-// screen like 关闭, and Forward or a reload shows that chart again.
+// screen like 返回, and Forward or a reload shows that chart again.
 
 const CHART_ENTRY = 'bazi-chart';
 
@@ -114,8 +134,12 @@ const CHART_ENTRY = 'bazi-chart';
 function entryIn(state: unknown): Entry | null {
   const e = (state as Record<string, unknown> | null)?.[CHART_ENTRY] as Partial<Entry> | undefined;
   if (!e || typeof e.input !== 'string' || (e.gender !== '男' && e.gender !== '女')) return null;
-  return { input: e.input, gender: e.gender, lateZi: e.lateZi === 'same' ? 'same' : 'next' };
+  const lateZi = e.lateZi === 'same' ? 'same' : 'next';
+  return { input: e.input, gender: e.gender, lateZi, ...(e.now === true && { now: true }) };
 }
+
+/** How often the app reads the clock again, for the 时空起盘 card and 虚岁. */
+const TICK_MS = 10_000;
 
 export interface AppProps {
   initial: AppState;
@@ -127,48 +151,64 @@ export function App({ initial, now }: AppProps) {
   // A reload keeps the current history entry: on a chart's entry, show that chart again.
   const [state, dispatch] = useReducer(reducer, initial, (s) => {
     const entry = entryIn(window.history.state);
-    return entry ? reducer(s, { type: 'open', entry, now: now() }) : s;
+    return entry ? reducer(s, { type: 'open', entry }) : s;
   });
+  const [clock, setClock] = useState(now);
   const castButton = useRef<HTMLButtonElement>(null);
   const chartHeading = useRef<HTMLHeadingElement>(null);
   const shownScreen = useRef(state.screen);
 
   useEffect(() => {
+    const id = window.setInterval(() => setClock(now()), TICK_MS);
+    return () => window.clearInterval(id);
+  }, [now]);
+
+  useEffect(() => {
     const onPop = (e: PopStateEvent) => {
       const entry = entryIn(e.state);
-      dispatch(entry ? { type: 'open', entry, now: now() } : { type: 'back' });
+      dispatch(entry ? { type: 'open', entry } : { type: 'back' });
     };
     window.addEventListener('popstate', onPop);
     return () => window.removeEventListener('popstate', onPop);
-  }, [now]);
+  }, []);
 
   // Each screen replaces the other, taking the focused button with it. Move focus onto the new screen, as a page load
-  // would: to the chart's heading after a cast, to 排盘 after going back. The first screen leaves focus alone.
+  // would: to the chart's heading after a cast, to 起盘 after going back. The first screen leaves focus alone.
   useEffect(() => {
     if (shownScreen.current === state.screen) return;
     shownScreen.current = state.screen;
     (state.screen === 'chart' ? chartHeading : castButton).current?.focus();
   }, [state.screen]);
 
-  if (state.screen === 'chart' && state.chart && state.pick) {
+  /** Opens a chart and keeps what it was cast from in its own history entry, for Forward and reload. */
+  const open = (entry: Entry, action: Action) => {
+    dispatch(action);
+    window.history.pushState({ [CHART_ENTRY]: entry }, '');
+    window.scrollTo(0, 0);
+  };
+
+  if (state.screen === 'chart' && state.chart) {
     return (
       <ChartScreen
         chart={state.chart}
+        now={parseInput(clock) ?? state.chart.time}
+        mode={state.mode}
         view={state.view}
-        level={state.level}
-        pick={state.pick}
-        panelOpen={state.panelOpen}
+        infoTab={state.infoTab}
+        flows={state.flows}
         headingRef={chartHeading}
         onBack={() => {
           // Show the input screen first, so a quick second tap can't reach this button again and go back twice.
           dispatch({ type: 'back' });
           if (entryIn(window.history.state)) window.history.back(); // leave the chart's entry too
         }}
+        onMode={(mode) => dispatch({ type: 'setMode', mode })}
         onView={(view) => dispatch({ type: 'setView', view })}
-        onLevel={(level) => dispatch({ type: 'setLevel', level })}
+        onInfoTab={(tab) => dispatch({ type: 'setInfoTab', tab })}
         onChoose={(level, value) => dispatch({ type: 'choose', level, value })}
-        onToday={() => dispatch({ type: 'today', now: now() })}
-        onTogglePanel={() => dispatch({ type: 'togglePanel' })}
+        onShowLevel={(level) => dispatch({ type: 'showLevel', level })}
+        onClear={(level) => dispatch({ type: 'clear', level })}
+        onStep={(delta) => dispatch({ type: 'step', delta })}
       />
     );
   }
@@ -178,17 +218,17 @@ export function App({ initial, now }: AppProps) {
       value={state.input}
       gender={state.gender}
       lateZi={state.lateZi}
+      now={clock}
       castRef={castButton}
       onChange={(value) => dispatch({ type: 'setInput', value })}
       onGender={(gender) => dispatch({ type: 'setGender', gender })}
       onLateZi={(lateZi) => dispatch({ type: 'setLateZi', lateZi })}
-      onCast={() => {
-        // Cast what the screen shows, and keep it in the chart's entry for Forward and reload.
-        dispatch({ type: 'cast', now: now() });
-        window.history.pushState({ [CHART_ENTRY]: entryOf(state) }, '');
-        window.scrollTo(0, 0);
+      onCast={() => open({ input: state.input, gender: state.gender, lateZi: state.lateZi }, { type: 'cast' })}
+      onCastNow={() => {
+        const minute = now();
+        setClock(minute);
+        open({ input: minute, gender: state.gender, lateZi: state.lateZi, now: true }, { type: 'castNow', now: minute });
       }}
-      onNow={() => dispatch({ type: 'setInput', value: now() })}
     />
   );
 }

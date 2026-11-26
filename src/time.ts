@@ -52,3 +52,17 @@ export function clockInput(clock: BirthTime): string {
   if (clock.year > MAX_YEAR) return `${MAX_YEAR}-12-31T23:59`;
   return formatInput(clock);
 }
+
+const SHI_CHEN = '子丑寅卯辰巳午未申酉戌亥';
+
+/** The date as the screens write it: '1996年 6月20日'. */
+export const dateLine = ({ year, month, day }: BirthTime): string => `${year}年 ${month}月${day}日`;
+
+/**
+ * The time on a 12-hour clock with its 时辰, as the screens write it: '下午6:00 酉时'. Midnight is 上午12, noon
+ * 下午12; 子时 runs from 23:00 to 00:59.
+ */
+export function clockLine({ hour, minute }: BirthTime): string {
+  const twelve = hour % 12 === 0 ? 12 : hour % 12;
+  return `${hour < 12 ? '上午' : '下午'}${twelve}:${pad(minute)} ${SHI_CHEN[Math.floor((hour + 1) / 2) % 12]}时`;
+}
