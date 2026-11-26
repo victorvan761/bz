@@ -1,150 +1,139 @@
-// 刑冲会合 (SPEC §6): the reference chart's 关系 view and its five 流年 cards, read off 十三行八字's App Store
-// screenshot, then each kind of relation on its own.
+// 刑冲会合 (SPEC §6): the lines of the screenshots' chart in the 关系 view, natal alone and with 大运 丁酉 and
+// 流年 丁未 or 丙午, then the App Store chart with 大运 乙卯 and 流年 庚子, then each kind of relation on its own.
 import { describe, expect, it } from 'vitest';
 import type { Branch, Stem } from '../src/bazi';
-import {
-  analyze, branchRelation, cardEntries, pairName, stemRelation, transforms,
-  type CardEntry, type Line, type RelColumn,
-} from '../src/relations';
+import { analyze, labelText, transforms, type Line, type RelColumn } from '../src/relations';
 
-const col = (name: string, gz: string): RelColumn => ({ name, stem: gz[0] as Stem, branch: gz[1] as Branch });
+/** A column with its place in the order of lines: 年 0, 月 1, 日 2, 时 3, 大运 4, 流年 5, 流月 6, 流日 7, 流时 8. */
+const col = (order: number, gz: string): RelColumn => ({ order, stem: gz[0] as Stem, branch: gz[1] as Branch });
 
-/** The natal pillars of the reference chart, 时 日 月 年 as the chart puts them, right of the flows. */
-const NATAL = [col('时柱', '辛酉'), col('日柱', '戊子'), col('月柱', '丙辰'), col('年柱', '戊子')];
-const DAY_MASTER: Stem = '戊';
-const MONTH: Branch = '辰';
+/** A line as one string: its characters with their columns (as the chart shows them, left to right), then its label. */
+const show = (l: Line, withGod = true) => `${l.members.map((m) => `${m.char}${m.col}`).join('-')} ${labelText(l.label, withGod)}`;
 
-/** A line as one string: its members, label and count, '辛2-丙4 合财成化'. */
-const show = (l: Line) =>
-  `${l.members.map((m) => `${m.char}${m.col}`).join('-')} ${l.parts.map((p) => p.text).join('')}${l.count > 1 ? ` ×${l.count}` : ''}`;
+/** The screenshots' natal pillars as the chart shows them: 时 日 月 年. */
+const SHOT_NATAL = [col(3, '辛酉'), col(2, '戊子'), col(1, '甲午'), col(0, '丙子')];
 
-/** A card entry as the card prints it: '月柱 克会', '○冲', '●2 合比成化'. */
-const entry = (e: CardEntry) => {
-  if (e.type === 'pair') return e.otherFirst ? `${e.other} ${e.name}` : `${e.name} ${e.other}`;
-  if (e.type === 'self') return e.name;
-  return `${e.level === 'stem' ? '○' : '●'}${e.count > 1 ? `${e.count} ` : ''}${e.parts.map((p) => p.text).join('')}`;
-};
+describe('the screenshots’ chart: 辛酉 戊子 甲午 丙子, day master 戊, month 午', () => {
+  const rel = (...flows: string[]) => analyze([...SHOT_NATAL, ...flows.map((gz, i) => col(4 + i, gz))], '戊', '午');
 
-describe('the reference chart in the 关系 view: 流年 庚子, 大运 乙卯, 辛酉 戊子 丙辰 戊子', () => {
-  const cols = [col('流年', '庚子'), col('大运', '乙卯'), ...NATAL];
-  const rel = analyze(cols, DAY_MASTER, MONTH);
-
-  it('draws the stem lines the screenshot draws, nearest the pillars first: 辛合丙, 乙冲辛, 庚合乙', () => {
-    expect(rel.stemLines.map(show)).toEqual(['辛2-丙4 合财成化', '乙1-辛2 冲', '庚0-乙1 合伤成化']);
-    // 辛 attacks 乙: the arrow points at 乙's column.
-    expect(rel.stemLines[1].toward).toBe(1);
+  it('draws the natal 冲 alone: 午冲子 (月 年) and 子冲午 (日 月); not 年 丙 with 时 辛, nor 子酉 破', () => {
+    const { stemLines, branchLines } = rel();
+    expect(stemLines).toEqual([]);
+    expect(branchLines.map((l) => show(l))).toEqual(['午2-子3 冲', '子1-午2 冲']);
   });
 
-  it('colors the 化神 by its element: 财 in water, 伤 in metal', () => {
-    expect(rel.stemLines[0].parts).toEqual([{ text: '合' }, { text: '财', element: '水' }, { text: '成化' }]);
-    expect(rel.stemLines[2].parts[1]).toEqual({ text: '伤', element: '金' });
+  it('with 大运 丁酉 and 流年 丁未: 酉刑酉, and 午未 合火(印)成化 (but no line for 子未 害)', () => {
+    const { stemLines, branchLines } = rel('丁酉', '丁未');
+    expect(stemLines).toEqual([]);
+    expect(branchLines.map((l) => show(l))).toEqual(['午2-子3 冲', '子1-午2 冲', '酉0-酉4 刑', '午2-未5 合火(印)成化']);
   });
 
-  it('draws the branch lines, nearest the pillars first, folding 卯 无礼之刑 with both natal 子 into one line of 2', () => {
-    expect(rel.branchLines.map(show)).toEqual([
-      '辰4-子5 半合财成化',
-      '子3-辰4 半合财成化',
-      '酉2-辰4 合伤成化',
-      '卯1-酉2 冲',
-      '卯1-子3-子5 无礼之刑 ×2',
-      '子0-卯1 无礼之刑',
-      '子0-辰4 半合财成化',
+  it('with 大运 丁酉 and 流年 丙午: 辛丙 合水(才)不化 above, and every line below in the screenshot’s order', () => {
+    const { stemLines, branchLines } = rel('丁酉', '丙午');
+    expect(stemLines.map((l) => show(l))).toEqual(['辛0-丙5 合水(才)不化']);
+    expect(branchLines.map((l) => show(l))).toEqual([
+      '午2-子3 冲', '子1-午2 冲', '酉0-酉4 刑', '子3-午5 冲', '子1-午5 冲', '午2-午5 刑',
     ]);
-    // 酉 attacks 卯.
-    expect(rel.branchLines[3].toward).toBe(1);
   });
 
-  it('names the pairs as the screenshot does, under the left column', () => {
-    const named = rel.pairs.map((p) => `${cols[p.col].name}: ${p.otherFirst ? `${cols[p.other].name} ${p.name}` : `${p.name} ${cols[p.other].name}`}`);
-    expect(named).toEqual(['流年: 月柱 克会', '流年: 合刑 大运', '大运: 时柱 反吟', '时柱: 双合 月柱', '日柱: 伏吟 年柱']);
-  });
-
-  it('marks 天地合 on both 戊子 pillars', () => {
-    expect(rel.selfCombined).toEqual([3, 5]);
+  it('keeps the 化神 and its 十神 apart for coloring, and leaves the 十神 out in the 藏干 and 五行 modes', () => {
+    const [he] = rel('丁酉', '丙午').stemLines;
+    expect(he.kind).toBe('合');
+    expect(he.label).toEqual({ word: '合', element: '水', god: '才', result: '不化' });
+    expect(labelText(he.label, false)).toBe('合水不化');
+    expect(rel('丁酉', '丙午').branchLines[0].label).toEqual({ word: '冲' });
   });
 });
 
-describe('the reference chart’s 流年 cards, read against 大运 乙卯 and the four pillars', () => {
-  const card = (gz: string) => cardEntries([col('流年', gz), col('大运', '乙卯'), ...NATAL], DAY_MASTER, MONTH).map(entry);
+describe('the App Store chart: 辛酉 戊子 丙辰 戊子, 大运 乙卯, 流年 庚子 (day master 戊, month 辰)', () => {
+  const cols = [col(3, '辛酉'), col(2, '戊子'), col(1, '丙辰'), col(0, '戊子'), col(4, '乙卯'), col(5, '庚子')];
+  const { stemLines, branchLines } = analyze(cols, '戊', '辰');
 
-  it('2021 辛丑', () => {
-    expect(card('辛丑')).toEqual(['同会 时柱', '○冲', '○合财成化', '●半合伤成化', '●2 合比成化']);
+  it('draws 辛丙 合, 辛乙 冲 and 乙庚 合 above', () => {
+    expect(stemLines.map((l) => show(l))).toEqual(['辛0-丙2 合水(才)成化', '辛0-乙4 冲', '乙4-庚5 合金(食)成化']);
   });
 
-  it('2020 庚子', () => {
-    expect(card('庚子')).toEqual(['月柱 克会', '合刑 大运', '○合伤成化', '●无礼之刑', '●半合财成化']);
-  });
-
-  it('2019 己亥', () => {
-    expect(card('己亥')).toEqual(['大运 克会', '●半合官成化']);
-  });
-
-  it('2018 戊戌 (the screenshot also lists 隔角拱才, which this app does not compute: SPEC §6.5)', () => {
-    expect(card('戊戌')).toEqual(['●冲', '●合印不化']);
-  });
-
-  it('2017 丁酉', () => {
-    expect(card('丁酉')).toEqual(['克刑 时柱', '●冲', '●自刑', '●合伤成化']);
+  it('draws every pair below, one line each: 子 刑 卯 from two columns is two lines', () => {
+    expect(branchLines.map((l) => show(l))).toEqual([
+      '辰2-子3 半合水(财)成化',
+      '子1-辰2 半合水(财)成化',
+      '酉0-辰2 合金(伤)成化',
+      '酉0-卯4 冲',
+      '子3-卯4 刑',
+      '子1-卯4 刑',
+      '卯4-子5 刑',
+      '辰2-子5 半合水(财)成化',
+    ]);
   });
 });
 
-describe('each relation', () => {
-  const lines = (gzs: string[], month: Branch = MONTH) =>
-    analyze(gzs.map((gz, i) => col(String(i), gz)), DAY_MASTER, month).branchLines.map(show);
+describe('each relation, for a 戊 day master in a 辰 month', () => {
+  const rel = (gzs: string[]) => analyze(gzs.map((gz, i) => col(i, gz)), '戊', '辰');
+  const branchLines = (gzs: string[]) => rel(gzs).branchLines.map((l) => show(l));
+  const stemLines = (gzs: string[]) => rel(gzs).stemLines.map((l) => show(l));
 
   it('三合 when all three branches stand, instead of their 半合 and 拱', () => {
-    expect(lines(['甲申', '丙子', '戊辰'])).toEqual(['申0-子1-辰2 三合财成化']);
-    expect(lines(['甲申', '戊辰'])).toEqual(['申0-辰1 拱财']);
+    expect(branchLines(['甲申', '丙子', '戊辰'])).toEqual(['申0-子1-辰2 三合水(财)成化']);
+    expect(branchLines(['甲申', '丙子'])).toEqual(['申0-子1 半合水(财)成化']);
+    expect(branchLines(['甲申', '戊辰'])).toEqual(['申0-辰1 拱水(财)']);
   });
 
   it('三会 when all three branches of a direction stand', () => {
-    expect(lines(['甲寅', '乙卯', '丙辰'])).toContain('寅0-卯1-辰2 三会官成化');
+    expect(branchLines(['甲寅', '乙卯', '丙辰'])).toEqual(['寅0-卯1-辰2 三会木(官)成化']);
   });
 
-  it('三刑 for 寅巳申 together, 无恩之刑 and 恃势之刑 for two of them', () => {
-    expect(lines(['甲寅', '乙巳', '丙申'])).toContain('寅0-巳1-申2 三刑');
-    expect(lines(['甲寅', '乙巳'])).toEqual(['寅0-巳1 无恩之刑']);
-    expect(lines(['乙丑', '甲戌'])).toEqual(['丑0-戌1 恃势之刑']);
-  });
-
-  it('冲 with or without a direction: 子 attacks 午, while 丑未 are both 土', () => {
-    const [ziWu] = analyze([col('a', '甲午'), col('b', '丙子')], DAY_MASTER, MONTH).branchLines;
-    expect(ziWu.toward).toBe(0);
-    const [chouWei] = analyze([col('a', '乙丑'), col('b', '丁未')], DAY_MASTER, MONTH).branchLines.filter((l) => l.kind === '冲');
-    expect(chouWei.toward).toBeUndefined();
+  it('三刑 for 寅巳申 together, instead of their pair 刑; 刑 for two of them, for 子卯, and for 辰午酉亥 twice', () => {
+    expect(branchLines(['甲寅', '乙巳', '丙申'])).toEqual(['寅0-申2 冲', '寅0-巳1-申2 三刑', '巳1-申2 合水(财)成化']);
+    expect(branchLines(['甲寅', '乙巳'])).toEqual(['寅0-巳1 刑']);
+    expect(branchLines(['乙丑', '甲戌'])).toEqual(['丑0-戌1 刑']);
+    expect(branchLines(['甲子', '乙卯'])).toEqual(['子0-卯1 刑']);
+    expect(branchLines(['甲午', '丙午'])).toEqual(['午0-午1 刑']);
+    expect(branchLines(['甲子', '丙子'])).toEqual([]);
   });
 
   it('暗合 for 寅丑, 卯申 and 午亥', () => {
-    expect(lines(['丙寅', '丁丑'])).toEqual(['寅0-丑1 暗合']);
-    expect(lines(['乙卯', '甲申'])).toEqual(['卯0-申1 暗合']);
-    expect(lines(['庚午', '辛亥'])).toEqual(['午0-亥1 暗合']);
+    expect(branchLines(['丙寅', '丁丑'])).toEqual(['寅0-丑1 暗合']);
+    expect(branchLines(['乙卯', '甲申'])).toEqual(['卯0-申1 暗合']);
+    expect(branchLines(['庚午', '辛亥'])).toEqual(['午0-亥1 暗合']);
   });
 
-  it('自刑 only for 辰午酉亥 twice; other repeated branches are no relation', () => {
-    expect(lines(['甲午', '丙午'])).toEqual(['午0-午1 自刑']);
-    expect(lines(['甲子', '丙子'])).toEqual([]);
+  it('no line for 六害 or 六破', () => {
+    expect(branchLines(['丙子', '丁未'])).toEqual([]);
+    expect(branchLines(['丙子', '丁酉'])).toEqual([]);
+    expect(branchLines(['乙卯', '丙辰'])).toEqual([]);
+    expect(branchLines(['乙卯', '甲午'])).toEqual([]);
   });
 
-  it('成化 when the month branch holds or produces the 化神 (SPEC §6.3)', () => {
+  it('a stem 合 names its yang 化神 stem, a branch 合 its yin one: 甲己 合土(比), 子丑 合土(劫)', () => {
+    expect(stemLines(['甲子', '己丑'])).toEqual(['甲0-己1 合土(比)成化']);
+    expect(branchLines(['甲子', '己丑'])).toEqual(['子0-丑1 合土(劫)成化']);
+  });
+
+  it('stem 冲: 甲庚, 乙辛, 丙壬, 丁癸', () => {
+    expect(stemLines(['甲子', '庚午'])).toEqual(['甲0-庚1 冲']);
+    expect(stemLines(['丙子', '壬辰'])).toEqual(['丙0-壬1 冲']);
+    expect(stemLines(['甲子', '戊辰'])).toEqual([]);
+  });
+
+  it('never relates the natal 年 and 时, but relates every other two columns, flows among themselves too', () => {
+    // 时 甲午, 年 丙子, 大运 戊子: 时 午 冲 大运 子, but not 年 子.
+    expect(analyze([col(3, '甲午'), col(0, '丙子'), col(4, '戊子')], '戊', '辰').branchLines.map((l) => show(l))).toEqual(['午0-子2 冲']);
+    expect(analyze([col(4, '乙卯'), col(5, '辛酉')], '戊', '辰').branchLines.map((l) => show(l))).toEqual(['卯0-酉1 冲']);
+    expect(analyze([col(3, '辛酉'), col(0, '丙子')], '戊', '午').stemLines).toEqual([]);
+  });
+
+  it('orders the lines by their later column, then by kind, then by their earlier column', () => {
+    // 流年 子 against 年 卯 (刑), 月 午 (冲) and 日 辰 (半合): 冲, 刑, 半合.
+    const cols = [col(2, '甲辰'), col(1, '甲午'), col(0, '丁卯'), col(5, '丙子')];
+    expect(analyze(cols, '戊', '辰').branchLines.map((l) => show(l))).toEqual(['午1-子3 冲', '卯2-子3 刑', '辰0-子3 半合水(财)成化']);
+  });
+
+  it('成化 when the month branch holds or produces the 化神 (SPEC §6.1)', () => {
     expect(transforms('水', '辰')).toBe(true); // 辰 holds 癸
     expect(transforms('金', '辰')).toBe(true); // 土 produces 金
     expect(transforms('火', '辰')).toBe(false);
-    expect(transforms('火', '寅')).toBe(true); // 寅 holds 丙
+    expect(transforms('火', '午')).toBe(true); // 午 holds 丁
+    expect(transforms('水', '午')).toBe(false);
     expect(transforms('木', '申')).toBe(false);
-  });
-
-  it('stem and branch relations for pairs, and the names they make', () => {
-    expect(stemRelation('丙', '庚')).toBe('克');
-    expect(stemRelation('乙', '戊')).toBeNull(); // 正官: one yin, one yang
-    expect(stemRelation('甲', '庚')).toBe('冲');
-    expect(stemRelation('甲', '己')).toBe('合');
-    expect(branchRelation('寅', '申')).toBe('冲');
-    expect(branchRelation('巳', '申')).toBe('合');
-    expect(branchRelation('酉', '酉')).toBe('刑');
-    expect(branchRelation('申', '辰')).toBeNull(); // 拱, not 会
-    expect(pairName(col('a', '甲子'), col('b', '庚午'))).toBe('反吟');
-    expect(pairName(col('a', '甲子'), col('b', '甲子'))).toBe('伏吟');
-    expect(pairName(col('a', '甲子'), col('b', '己丑'))).toBe('双合');
-    expect(pairName(col('a', '甲子'), col('b', '戊子'))).toBeNull(); // same branch, no 伏吟
   });
 });

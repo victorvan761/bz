@@ -1,14 +1,16 @@
-// The engine (SPEC §4–§5): the reference chart from 十三行八字's App Store screenshot, then every lookup and the
-// four pillars, 大运 and 起运 checked against lunar-typescript on random births, then the flows.
+// The engine (SPEC §4–§5): the two reference charts (the screenshots' and the App Store's), every lookup and the
+// four pillars, 大运 and 起运 checked against lunar-typescript on random births, then the flows and how they are
+// chosen.
 import { LunarUtil, Solar } from 'lunar-typescript';
 import { describe, expect, it } from 'vitest';
 import {
-  BRANCHES, SHI_SHEN_NAME, SIXTY, STEMS, castBazi, choose, dayItems, daYunItems, flowColumns, hourItems, monthGanZhi,
-  monthItems, pickAt, pillarOf, shiShen, stage, strength, xunKong, yearGanZhi, yearItems, yunText,
-  type Branch, type Gender, type Stem,
+  BRANCHES, NO_FLOWS, SHI_SHEN_NAME, SIXTY, STEMS, birthText, castBazi, choose, clearFrom, dayItems, daYunItems,
+  estimateText, favorable, flowColumns, hourItems, jiaoYunText, monthGanZhi, monthItems, naYin, pillarOf,
+  profileText, sanDe, shiShen, showLevel, stage, step, stripLines, xiJi, xunKong, yearGanZhi, yearItems, yunText,
+  type Branch, type Flows, type FlowItem, type Gender, type Stem,
 } from '../src/bazi';
 import type { BirthTime } from '../src/time';
-import { REF } from './reference';
+import { REF, SHOT, SHOT_NOW } from './reference';
 
 /** A small seeded random number generator, so the random births are the same on every run. */
 function random(seed: number) {
@@ -29,14 +31,124 @@ function randomBirths(count: number, seed = 8): BirthTime[] {
   });
 }
 
-describe('the reference chart (十三行八字, App Store screenshot 1)', () => {
+/** An item as the grid prints it: its two lines and its pillar, '25 2021 辛丑'. */
+const cell = (item: FlowItem) => [item.big, item.small, item.pillar.ganZhi].filter(Boolean).join(' ');
+
+describe('the screenshots’ chart: 男 1996-06-20 18:00', () => {
+  const chart = castBazi(SHOT, '男');
+  const { year, month, day, hour } = chart.pillars;
+
+  it('has the pillars 丙子 甲午 戊子 辛酉 with day master 戊', () => {
+    expect([year, month, day, hour].map((p) => p.ganZhi)).toEqual(['丙子', '甲午', '戊子', '辛酉']);
+    expect(chart.dayMaster).toBe('戊');
+  });
+
+  it('writes the 十神 the 十神 mode shows: 卩 杀 伤 beside the stems, 午 印 劫, 子 财, 酉 伤', () => {
+    expect([year.god, month.god, day.god, hour.god]).toEqual(['卩', '杀', null, '伤']);
+    const hidden = (p: typeof year) => p.hidden.map((h) => h.god + h.stem).join(' ');
+    expect([hidden(year), hidden(month), hidden(day), hidden(hour)]).toEqual(['财癸', '印丁 劫己', '财癸', '伤辛']);
+  });
+
+  it('has the 基本资料 the 资料 view shows', () => {
+    expect(profileText(chart, SHOT_NOW)).toBe('阳男 肖鼠 虚岁 31');
+    expect(birthText(chart)).toBe('1996年 6月20日 下午6:00 酉时');
+    expect(chart.lunarDate).toBe('一九九六年 五月初五');
+    expect(yunText(chart.yun)).toBe('出生后 5年 5个月 20天 起运');
+    expect(jiaoYunText(chart)).toBe('逢辛丙年 大雪后 3天 交大运');
+    expect(chart.yun.start).toBe('2001-12-10 18:00');
+  });
+
+  it('counts 虚岁 by the 农历 year: 30 before 春节 2026, 31 from it', () => {
+    expect(profileText(chart, { year: 2026, month: 2, day: 16, hour: 12, minute: 0 })).toBe('阳男 肖鼠 虚岁 30');
+    expect(profileText(chart, { year: 2026, month: 2, day: 17, hour: 12, minute: 0 })).toBe('阳男 肖鼠 虚岁 31');
+  });
+
+  it('has 命宫 身宫 胎元 胎息 with their 纳音', () => {
+    const four = [chart.mingGong, chart.shenGong, chart.taiYuan, chart.taiXi];
+    expect(four).toEqual(['庚寅', '壬辰', '乙酉', '癸丑']);
+    expect(four.map(naYin)).toEqual(['松柏木', '长流水', '泉中水', '桑柘木']);
+  });
+
+  it('estimates 身弱 (得令，失地，失势)', () => {
+    expect(sanDe(chart)).toEqual({ ling: true, di: false, shi: false, strong: false });
+    expect(estimateText(chart)).toBe('系统估算：身弱 (得令，失地，失势)');
+  });
+
+  it('takes 印 as 用神: 火 用, 木 喜, 土 闲, 水 忌, 金 仇', () => {
+    expect(xiJi(chart)).toEqual({ 火: '用', 木: '喜', 土: '闲', 水: '忌', 金: '仇' });
+  });
+
+  it('colors the characters as the screenshots do: 戊 甲 午 丙 blue, 辛 酉 子 red', () => {
+    const fav = favorable(chart);
+    const blue = (c: string) => (fav[(STEMS.includes(c) ? stemEl(c) : branchEl(c))] ? 'blue' : 'red');
+    expect([...'辛戊甲丙'].map(blue)).toEqual(['red', 'blue', 'blue', 'blue']);
+    expect([...'酉子午子'].map(blue)).toEqual(['red', 'red', 'blue', 'red']);
+  });
+
+  it('writes 星运, 自坐 and 空 as the 神煞 view does', () => {
+    expect([hour, day, month, year].map((p) => p.xingYun)).toEqual(['死', '胎', '帝旺', '胎']);
+    expect([hour, day, month, year].map((p) => p.ziZuo)).toEqual(['临官', '胎', '死', '胎']);
+    expect(chart.dayKong).toBe('午未');
+  });
+
+  it('lists ten 大运 from 乙未 at 5 (2001), without 童限', () => {
+    expect(daYunItems(chart).map(cell)).toEqual([
+      '5 2001 乙未', '15 2011 丙申', '25 2021 丁酉', '35 2031 戊戌', '45 2041 己亥',
+      '55 2051 庚子', '65 2061 辛丑', '75 2071 壬寅', '85 2081 癸卯', '95 2091 甲辰',
+    ]);
+  });
+
+  it('lists the ten years of 大运 丁酉, 2021 (its 交运 year) gray up to 交运', () => {
+    const years = yearItems(chart, 2);
+    expect(years.map(cell)).toEqual([
+      '25 2021 辛丑', '26 2022 壬寅', '27 2023 癸卯', '28 2024 甲辰', '29 2025 乙巳',
+      '30 2026 丙午', '31 2027 丁未', '32 2028 戊申', '33 2029 己酉', '34 2030 庚戌',
+    ]);
+    // 交运 on 2021-12-10 (大雪 + 3 days): 310 of the 366 days from 立春 2021 to 立春 2022. The screenshot's gray
+    // stops at 146 of the cell's 172 pixels.
+    expect(years[0].jiaoYun).toBeCloseTo(310 / 366, 6);
+    expect(years.slice(1).map((y) => y.jiaoYun)).toEqual(Array(9).fill(undefined));
+    // 2025 乙巳: 巳 hides 丙 戊 庚, so its 十神 stack reads 卩 比 食 (lunar-typescript lists 丙 庚 戊).
+    expect(years[4].pillar.hidden.map((h) => h.stem + h.god)).toEqual(['丙卩', '戊比', '庚食']);
+  });
+
+  it('lists the twelve months of 2026 from 立春, dated day/month', () => {
+    expect(monthItems(chart, 2026).map(cell)).toEqual([
+      '立春 4/2 庚寅', '惊蛰 5/3 辛卯', '清明 5/4 壬辰', '立夏 5/5 癸巳', '芒种 5/6 甲午', '小暑 7/7 乙未',
+      '立秋 7/8 丙申', '白露 7/9 丁酉', '寒露 8/10 戊戌', '立冬 7/11 己亥', '大雪 7/12 庚子', '小寒 5/1 辛丑',
+    ]);
+  });
+
+  it('lists the days of 立冬 2026, 7/11 to 6/12, with 24/11 壬寅', () => {
+    const days = dayItems(chart, 2026, 9);
+    expect(days).toHaveLength(30);
+    expect([days[0], days[9], days[17], days[29]].map(cell)).toEqual(['7/11 乙酉', '16/11 甲午', '24/11 壬寅', '6/12 甲寅']);
+    expect(days.every((d) => d.big === '')).toBe(true);
+  });
+
+  it('lists thirteen 时辰 on 2026-11-24: 子 0 - 1 to 子 23 - 24, the last 子 with the next day’s stem', () => {
+    const hours = hourItems(chart, 2026, 9, 17);
+    expect(hours.map((h) => `${h.big} ${h.small}`)).toEqual([
+      '子 0 - 1', '丑 1 - 3', '寅 3 - 5', '卯 5 - 7', '辰 7 - 9', '巳 9 - 11', '午 11 - 13',
+      '未 13 - 15', '申 15 - 17', '酉 17 - 19', '戌 19 - 21', '亥 21 - 23', '子 23 - 24',
+    ]);
+    expect(hours.map((h) => h.pillar.ganZhi)).toEqual(
+      ['庚子', '辛丑', '壬寅', '癸卯', '甲辰', '乙巳', '丙午', '丁未', '戊申', '己酉', '庚戌', '辛亥', '壬子'],
+    );
+  });
+});
+
+const stemEl = (c: string) => ({ 甲: '木', 乙: '木', 丙: '火', 丁: '火', 戊: '土', 己: '土', 庚: '金', 辛: '金', 壬: '水', 癸: '水' })[c] as '木';
+const branchEl = (c: string) =>
+  ({ 子: '水', 丑: '土', 寅: '木', 卯: '木', 辰: '土', 巳: '火', 午: '火', 未: '土', 申: '金', 酉: '金', 戌: '土', 亥: '水' })[c] as '木';
+
+describe('the App Store chart: 坤造 2008-04-18 18:00', () => {
   const chart = castBazi(REF, '女');
   const { year, month, day, hour } = chart.pillars;
 
   it('has the pillars 戊子 丙辰 戊子 辛酉 with day master 戊', () => {
     expect([year, month, day, hour].map((p) => p.ganZhi)).toEqual(['戊子', '丙辰', '戊子', '辛酉']);
     expect(chart.dayMaster).toBe('戊');
-    expect(chart.qianKun).toBe('坤造');
   });
 
   it('writes each stem’s 十神 as the screenshot does: 年 比, 月 卩, 时 伤, none for the day master', () => {
@@ -52,31 +164,27 @@ describe('the reference chart (十三行八字, App Store screenshot 1)', () => 
 
   it('runs 大运 backward for a 坤造 born in a yang year: 乙卯 from 2012, shown at age 4', () => {
     expect(chart.yun.forward).toBe(false);
-    const items = daYunItems(chart);
-    expect(items[0]).toMatchObject({ label: '童限', pillar: null, big: '0', small: '2008' });
-    expect(items[1]).toMatchObject({ label: '大运', big: '4', small: '2012' });
-    expect(items[1].pillar?.ganZhi).toBe('乙卯');
-    expect(items.slice(1).map((d) => d.pillar?.ganZhi)).toEqual(['乙卯', '甲寅', '癸丑', '壬子', '辛亥', '庚戌', '己酉', '戊申', '丁未', '丙午']);
+    expect(daYunItems(chart).map(cell).slice(0, 3)).toEqual(['4 2012 乙卯', '14 2022 甲寅', '24 2032 癸丑']);
+    expect(daYunItems(chart).map((d) => d.pillar.ganZhi)).toEqual(
+      ['乙卯', '甲寅', '癸丑', '壬子', '辛亥', '庚戌', '己酉', '戊申', '丁未', '丙午'],
+    );
   });
 
   it('shows 流年 2017–2021 as 丁酉 戊戌 己亥 庚子 辛丑, at ages 9–13', () => {
-    const years = yearItems(chart, 1).filter((y) => y.value >= 2017 && y.value <= 2021);
-    expect(years.map((y) => `${y.big} ${y.small} ${y.pillar?.ganZhi}`)).toEqual([
-      '9 2017 丁酉', '10 2018 戊戌', '11 2019 己亥', '12 2020 庚子', '13 2021 辛丑',
-    ]);
+    const years = yearItems(chart, 0).filter((y) => y.value >= 2017 && y.value <= 2021);
+    expect(years.map(cell)).toEqual(['9 2017 丁酉', '10 2018 戊戌', '11 2019 己亥', '12 2020 庚子', '13 2021 辛丑']);
   });
 
-  it('starts luck 4 years 8 months 1 day 6 hours after birth, on 2012-12-20', () => {
-    expect(yunText(chart.yun)).toBe('出生后4年8个月1天6小时起运');
+  it('starts luck 4 years 8 months 1 day after birth, on 2012-12-20, 13 days after 大雪 in a 壬 year', () => {
+    expect(yunText(chart.yun)).toBe('出生后 4年 8个月 1天 起运');
     expect(chart.yun.start).toBe('2012-12-20 00:00');
+    expect(jiaoYunText(chart)).toBe('逢壬丁年 大雪后 13天 交大运');
   });
 
-  it('prints the header facts: 农历, 生肖, 胎元 命宫 身宫, the 节 around the birth', () => {
-    expect(chart.lunarText).toBe('戊子年 三月十三 酉时');
-    expect(chart.zodiac).toBe('鼠');
-    expect([chart.taiYuan, chart.mingGong, chart.shenGong]).toEqual(['丁未', '丙辰', '甲寅']);
-    expect(chart.jie.prev).toEqual({ name: '清明', time: '2008-04-04 17:45' });
-    expect(chart.jie.next.name).toBe('立夏');
+  it('writes the 基本资料: 阳女, 农历 二〇〇八年 三月十三', () => {
+    expect(profileText(chart, SHOT_NOW)).toBe('阳女 肖鼠 虚岁 19');
+    expect(chart.lunarDate).toBe('二〇〇八年 三月十三');
+    expect(birthText(chart)).toBe('2008年 4月18日 下午6:00 酉时');
   });
 
   it('prints 纳音, 星运, 自坐 and 空亡 for each pillar', () => {
@@ -86,11 +194,9 @@ describe('the reference chart (十三行八字, App Store screenshot 1)', () => 
     expect([year, month, day, hour].map((p) => p.kong)).toEqual(['午未', '子丑', '午未', '子丑']);
   });
 
-  it('estimates the day master 偏弱: 土 and 火 hold 40% of the points', () => {
-    const s = strength(chart);
-    expect(s.scores).toEqual({ 木: 0.6, 火: 1, 土: 2.2, 金: 2, 水: 2.2 });
-    expect(s.support).toBeCloseTo(0.4);
-    expect(s.verdict).toBe('偏弱');
+  it('estimates 身强 (得令，失地，得势) and takes 财 as 用神', () => {
+    expect(estimateText(chart)).toBe('系统估算：身强 (得令，失地，得势)');
+    expect(xiJi(chart)).toEqual({ 水: '用', 金: '喜', 木: '闲', 土: '忌', 火: '仇' });
   });
 });
 
@@ -140,7 +246,7 @@ describe('the lookups, against lunar-typescript', () => {
 describe('四柱, 大运 and 起运 for 400 random births, against lunar-typescript', () => {
   const births = randomBirths(400);
 
-  it('the four pillars, 纳音, 星运, 自坐 and 空亡, with either 夜子时 rule', () => {
+  it('the four pillars, 纳音, 星运, 空亡 and 命宫 身宫 胎元 胎息, with either 夜子时 rule', () => {
     for (const [i, t] of births.entries()) {
       const lateZi = i % 2 === 0 ? 'next' : 'same';
       const chart = castBazi(t, i % 3 === 0 ? '男' : '女', { lateZi });
@@ -155,12 +261,18 @@ describe('四柱, 大运 and 起运 for 400 random births, against lunar-typescr
         .toEqual([ec.getYearDiShi(), ec.getMonthDiShi(), ec.getDayDiShi(), ec.getTimeDiShi()]);
       expect([year, month, day, hour].map((p) => p.kong), label)
         .toEqual([ec.getYearXunKong(), ec.getMonthXunKong(), ec.getDayXunKong(), ec.getTimeXunKong()]);
-      expect(month.hidden.map((h) => SHI_SHEN_NAME[h.god]), label).toEqual(ec.getMonthShiShenZhi());
+      expect(chart.dayKong, label).toBe(ec.getDayXunKong());
+      expect([chart.mingGong, chart.shenGong, chart.taiYuan, chart.taiXi], label)
+        .toEqual([ec.getMingGong(), ec.getShenGong(), ec.getTaiYuan(), ec.getTaiXi()]);
+      // 巳 hides 丙 戊 庚, as 十三行八字 lists them; lunar-typescript has 丙 庚 戊.
+      const lunarGods = ec.getMonthShiShenZhi();
+      expect(month.hidden.map((h) => SHI_SHEN_NAME[h.god]), label)
+        .toEqual(month.branch === '巳' ? [lunarGods[0], lunarGods[2], lunarGods[1]] : lunarGods);
       expect(hour.god && SHI_SHEN_NAME[hour.god], label).toBe(ec.getTimeShiShenGan());
     }
   });
 
-  it('起运 to the minute, and ten 大运 counted on from the month pillar', () => {
+  it('起运 to the minute, 交运 after its 节, and ten 大运 counted on from the month pillar', () => {
     for (const [i, t] of births.entries()) {
       const gender: Gender = i % 2 === 0 ? '男' : '女';
       const chart = castBazi(t, gender);
@@ -169,88 +281,92 @@ describe('四柱, 大运 and 起运 for 400 random births, against lunar-typescr
       expect(chart.yun, label).toMatchObject({
         forward: yun.isForward(), years: yun.getStartYear(), months: yun.getStartMonth(), days: yun.getStartDay(), hours: yun.getStartHour(),
       });
-      const dy = chart.daYun.filter((d) => d.pillar);
-      expect(dy).toHaveLength(10);
+      const start = yun.getStartSolar().getLunar();
+      expect(chart.jiaoYun.stems[0], label).toBe(start.getYearGanExact());
+      expect(chart.jiaoYun.jie, label).toBe(start.getPrevJie().getName());
+      expect(chart.jiaoYun.days, label).toBeGreaterThanOrEqual(0);
+      expect(chart.jiaoYun.days, label).toBeLessThanOrEqual(32); // a 节 month can span 32 calendar days
+      expect(chart.daYun).toHaveLength(10);
       const step = yun.isForward() ? 1 : -1;
       const m = SIXTY.indexOf(chart.pillars.month.ganZhi);
-      dy.forEach((d, k) => {
-        expect(d.pillar!.ganZhi, label).toBe(SIXTY[(((m + step * (k + 1)) % 60) + 60) % 60]);
+      chart.daYun.forEach((d, k) => {
+        expect(d.pillar.ganZhi, label).toBe(SIXTY[(((m + step * (k + 1)) % 60) + 60) % 60]);
         expect(d.endYear - d.startYear, label).toBe(9);
-        if (k > 0) expect(d.startYear, label).toBe(dy[k - 1].endYear + 1);
+        if (k > 0) expect(d.startYear, label).toBe(chart.daYun[k - 1].endYear + 1);
       });
-      // 童限 runs from the birth year to the year before the first 大运, when there is such a year.
-      if (chart.daYun[0].pillar === null) {
-        expect(chart.daYun[0].startYear).toBe(t.year);
-        expect(chart.daYun[0].endYear).toBe(dy[0].startYear - 1);
-      } else {
-        expect(dy[0].startYear).toBe(t.year);
-      }
+      expect(chart.daYun[0].startYear, label).toBe(yun.getStartSolar().getYear());
+      const part = yearItems(chart, 0)[0].jiaoYun ?? 0;
+      expect(part, label).toBeGreaterThanOrEqual(0);
+      expect(part, label).toBeLessThanOrEqual(1);
     }
   });
 });
 
-describe('the flows', () => {
-  const chart = castBazi(REF, '女');
+describe('choosing the flows (SPEC §5.3)', () => {
+  const chart = castBazi(SHOT, '男');
+  const columns = (f: Flows) =>
+    flowColumns(chart, f).map((c) => `${['大运', '流年', '流月', '流日', '流时'][c.level]}${c.item ? ` ${c.item.pillar.ganZhi}` : ''}`);
 
-  it('流月 start at their 节, from 立春 to 小寒 of the next 公历 year', () => {
-    const months = monthItems(chart, 2020);
-    expect(months.map((m) => m.big)).toEqual(['立春', '惊蛰', '清明', '立夏', '芒种', '小暑', '立秋', '白露', '寒露', '立冬', '大雪', '小寒']);
-    expect(months[0].small).toBe('2/4');
-    expect(months[11].small).toBe('1/5');
-    expect(months.map((m) => m.pillar?.ganZhi)).toEqual(
-      ['戊寅', '己卯', '庚辰', '辛巳', '壬午', '癸未', '甲申', '乙酉', '丙戌', '丁亥', '戊子', '己丑'],
-    );
+  it('starts with nothing chosen and the 大运 listed: the columns are 大运 and 流年', () => {
+    expect(NO_FLOWS).toEqual({ chosen: [], level: 0 });
+    expect(columns(NO_FLOWS)).toEqual(['大运', '流年']);
+    expect(stripLines(chart, NO_FLOWS)).toBeNull();
   });
 
-  it('流日 are the days from a 节 up to the next one, with their day pillars', () => {
-    for (let m = 0; m < 12; m++) {
-      const days = dayItems(chart, 2020, m);
-      expect(days.length, `month ${m}`).toBeGreaterThanOrEqual(29);
-      expect(days.length, `month ${m}`).toBeLessThanOrEqual(32);
-    }
-    // 2020's 辰月 runs from 清明 (4月4日) to the day before 立夏 (5月5日).
-    const chen = dayItems(chart, 2020, 2);
-    expect([chen[0].small + chen[0].big, chen.at(-1)!.small + chen.at(-1)!.big]).toEqual(['4月4', '5月4']);
-    expect(chen[0].pillar?.ganZhi).toBe(Solar.fromYmd(2020, 4, 4).getLunar().getDayInGanZhi());
-    // 丑月 runs into the next 公历 year, up to the day before 立春.
-    expect(dayItems(chart, 2020, 11).at(-1)).toMatchObject({ small: '2月', big: '2' });
+  it('chooses a 大运, then a year, each time listing the next level', () => {
+    const dy = choose(NO_FLOWS, 0, 2);
+    expect(dy).toEqual({ chosen: [2], level: 1 });
+    expect(columns(dy)).toEqual(['大运 丁酉', '流年']);
+    const yr = choose(dy, 1, 2026);
+    expect(yr).toEqual({ chosen: [2, 2026], level: 2 });
+    expect(columns(yr)).toEqual(['大运 丁酉', '流年 丙午', '流月']);
   });
 
-  it('流时 run 子 … 亥, their stems by 五鼠遁 from the day’s stem', () => {
-    const hours = hourItems(chart, 2020, 2, 0); // 2020-04-04, 丁丑日
-    expect(hours.map((h) => h.pillar?.ganZhi)).toEqual(
-      ['庚子', '辛丑', '壬寅', '癸卯', '甲辰', '乙巳', '丙午', '丁未', '戊申', '己酉', '庚戌', '辛亥'],
-    );
-    expect(hours.map((h) => h.small).slice(0, 3)).toEqual(['23–01', '01–03', '03–05']);
+  it('goes down to the 时辰, and stays there', () => {
+    let f = choose(choose(NO_FLOWS, 0, 2), 1, 2026);
+    f = choose(choose(f, 2, 9), 3, 17);
+    expect(f).toEqual({ chosen: [2, 2026, 9, 17], level: 4 });
+    expect(columns(f)).toEqual(['大运 丁酉', '流年 丙午', '流月 己亥', '流日 壬寅', '流时']);
+    f = choose(f, 4, 12);
+    expect(f).toEqual({ chosen: [2, 2026, 9, 17, 12], level: 4 });
+    expect(columns(f).at(-1)).toBe('流时 壬子');
   });
 
-  it('picks the moment’s 流年 (turning at 立春), 流月 (at each 节), day and 时辰', () => {
-    expect(pickAt(chart, { year: 2020, month: 4, day: 18, hour: 18, minute: 0 })).toEqual({ dayun: 1, year: 2020, month: 2, day: 14, hour: 9 });
-    // 2021-02-03 is before 立春: still 流年 2020, 丑月.
-    expect(pickAt(chart, { year: 2021, month: 2, day: 3, hour: 0, minute: 30 })).toMatchObject({ year: 2020, month: 11, hour: 0 });
-    // 23:30 is the 子 hour.
-    expect(pickAt(chart, { year: 2021, month: 2, day: 4, hour: 23, minute: 30 }).hour).toBe(0);
-    // Before birth: the first year of the chart, from its first month.
-    expect(pickAt(chart, { year: 1990, month: 6, day: 1, hour: 12, minute: 0 })).toMatchObject({ dayun: 0, year: 2008, month: 0, day: 0 });
-    // After the last 大运 (2102–2111): its last year.
-    const last = chart.daYun.at(-1)!;
-    expect(last.endYear).toBe(2111);
-    expect(pickAt(chart, { year: 2150, month: 6, day: 1, hour: 12, minute: 0 })).toMatchObject({ dayun: chart.daYun.length - 1, year: 2111 });
+  it('choosing again at a level drops what was chosen below it', () => {
+    const f = choose({ chosen: [2, 2026, 9, 17], level: 1 }, 1, 2027);
+    expect(f).toEqual({ chosen: [2, 2027], level: 2 });
   });
 
-  it('choosing a 大运 keeps the year if it is one of its years, else takes its first; the day stays in its month', () => {
-    const pick = pickAt(chart, { year: 2020, month: 4, day: 18, hour: 18, minute: 0 });
-    expect(choose(chart, pick, 'dayun', 2)).toMatchObject({ dayun: 2, year: 2022 });
-    expect(choose(chart, pick, 'dayun', 1)).toEqual(pick);
-    expect(choose(chart, { ...pick, day: 30 }, 'month', 0).day).toBe(dayItems(chart, 2020, 0).length - 1);
-    expect(choose(chart, pick, 'year', 2015)).toMatchObject({ dayun: 1, year: 2015 });
+  it('lists a chosen level again, keeping its columns; ⊗ clears a level and those below', () => {
+    const deep: Flows = { chosen: [2, 2026, 9], level: 3 };
+    expect(showLevel(deep, 1)).toEqual({ chosen: [2, 2026, 9], level: 1 });
+    expect(columns(showLevel(deep, 1))).toEqual(['大运 丁酉', '流年 丙午', '流月 己亥']);
+    expect(showLevel(deep, 4)).toBe(deep); // not reachable yet
+    expect(clearFrom(deep, 1)).toEqual({ chosen: [2], level: 1 });
+    expect(columns(clearFrom(deep, 1))).toEqual(['大运 丁酉', '流年']);
   });
 
-  it('the chart’s flow columns run from the panel’s level up to 大运', () => {
-    const pick = pickAt(chart, { year: 2020, month: 4, day: 18, hour: 18, minute: 0 });
-    expect(flowColumns(chart, 'dayun', pick).map((c) => c.label)).toEqual(['大运']);
-    expect(flowColumns(chart, 'year', pick).map((c) => `${c.label}${c.pillar?.ganZhi}`)).toEqual(['流年庚子', '大运乙卯']);
-    expect(flowColumns(chart, 'hour', pick).map((c) => c.label)).toEqual(['流时', '流日', '流月', '流年', '大运']);
-    expect(flowColumns(chart, 'hour', pick)[0].pillar?.ganZhi).toBe('丁酉'); // 2020-04-18 is a 辛卯 day: its 酉时 is 丁酉
+  it('names the level above in the strip: the 大运’s ages, the 流年’s age, the 流月’s 节, the 流日’s date', () => {
+    expect(stripLines(chart, { chosen: [2], level: 1 })).toEqual(['25', '|', '34', '岁']);
+    expect(stripLines(chart, { chosen: [2, 2026], level: 2 })).toEqual(['30', '岁']);
+    expect(stripLines(chart, { chosen: [2, 2026, 9], level: 3 })).toEqual(['立', '冬']);
+    expect(stripLines(chart, { chosen: [2, 2026, 9, 17], level: 4 })).toEqual(['24', '/', '11']);
+  });
+
+  it('steps the level above, crossing into the next 大运, year or month, and drops the listed level’s choice', () => {
+    expect(step(chart, { chosen: [2], level: 1 }, 1)).toEqual({ chosen: [3], level: 1 });
+    expect(step(chart, { chosen: [2, 2030], level: 2 }, 1)).toEqual({ chosen: [3, 2031], level: 2 });
+    expect(step(chart, { chosen: [2, 2026, 11], level: 3 }, 1)).toEqual({ chosen: [2, 2027, 0], level: 3 });
+    expect(step(chart, { chosen: [2, 2026, 9, 29], level: 4 }, 1)).toEqual({ chosen: [2, 2026, 10, 0], level: 4 });
+    expect(step(chart, { chosen: [2, 2026, 10, 0], level: 4 }, -1)).toEqual({ chosen: [2, 2026, 9, 29], level: 4 });
+    expect(step(chart, { chosen: [2, 2026, 9], level: 2 }, 1)).toEqual({ chosen: [2, 2027], level: 2 });
+  });
+
+  it('stops at the ends of the chart: the first 大运’s first year, the last 大运', () => {
+    const first: Flows = { chosen: [0, 2001], level: 2 };
+    expect(step(chart, first, -1)).toEqual(first);
+    const last: Flows = { chosen: [9], level: 1 };
+    expect(step(chart, last, 1)).toEqual(last);
+    expect(step(chart, NO_FLOWS, 1)).toEqual(NO_FLOWS);
   });
 });
